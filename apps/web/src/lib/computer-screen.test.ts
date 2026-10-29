@@ -7,6 +7,7 @@ import {
   loadComputerScreen,
   probeScreen,
   probeScreenStatus,
+  sameWuyingScreen,
   screenFrameError,
   screenFrameMessage,
   screenFrameStarted,
@@ -89,6 +90,21 @@ describe("computer screen requests", () => {
       fallbackError: "Could not connect",
     });
     expect(commit).toHaveBeenCalledExactlyOnceWith({ url: null, error: "Could not connect" });
+  });
+});
+
+describe("sameWuyingScreen", () => {
+  const screen = (code: string, viewOnly = "true", desktop = "ecd-1") =>
+    `wuying://desktop?desktop_id=${desktop}&region_id=cn-hangzhou&auth_code=${code}&view_only=${viewOnly}`;
+
+  it("keeps a connected Wuying screen when only its login code changes", () => {
+    expect(sameWuyingScreen(screen("a"), screen("b"))).toBe(true);
+    expect(sameWuyingScreen(screen("a"), screen("b", "false"))).toBe(false);
+    expect(sameWuyingScreen(screen("a"), screen("b", "true", "ecd-2"))).toBe(false);
+    expect(sameWuyingScreen(null, screen("b"))).toBe(false);
+    expect(sameWuyingScreen("http://127.0.0.1:5173/novnc/a", "http://127.0.0.1:5173/novnc/a")).toBe(
+      false,
+    );
   });
 });
 

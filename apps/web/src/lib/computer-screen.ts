@@ -56,6 +56,25 @@ export function embeddableScreenUrl(url: string | null): string | null {
   }
 }
 
+/**
+ * A Wuying screen URL carries a one-time login code, so every read of it differs. Reloading the
+ * frame for a new code would open a second session that signs the first one out; the screen keeps
+ * the URL it connected with until the desktop or the view changes.
+ */
+export function sameWuyingScreen(current: string | null, next: string | null): boolean {
+  if (!current || !next) return false;
+  try {
+    const a = new URL(current);
+    const b = new URL(next);
+    if (a.protocol !== "wuying:" || b.protocol !== "wuying:") return false;
+    return ["desktop_id", "region_id", "view_only"].every(
+      (name) => a.searchParams.get(name) === b.searchParams.get(name),
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function screenIframeSandbox(url: string | null) {
   if (!url) return undefined;
   try {
