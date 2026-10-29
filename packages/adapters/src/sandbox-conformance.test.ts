@@ -7,6 +7,7 @@ import {
   fakeBoatProvider as fakeBoat,
   routeFakeBoatDownloads,
 } from "./boat-sandbox.test-support.js";
+import { fakeBoxdProvider } from "./boxd-sandbox.test-support.js";
 import { DesktopSandboxProvider } from "./desktop-sandbox.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { emulatedNovita } from "./novita-sandbox.test-support.js";
@@ -37,30 +38,35 @@ async function drain(provider: SandboxProvider, computer: ComputerRef) {
 }
 
 describe("sandbox conformance", () => {
-  it("runs the same graphical command across fake, Boat, Novita, and desktop", async () => {
+  it("runs the same graphical command across fake, Boat, boxd, Novita, and desktop", async () => {
     const fake = new FakeSandboxProvider();
     const boat = fakeBoat();
     const novita = emulatedNovita().provider();
     const desktop = new DesktopSandboxProvider();
+    const boxd = fakeBoxdProvider();
     const a = await provisionPrepared(fake, { botId: "bot-a", homePath: "/tmp/a" }, ctx);
     const b = await provisionPrepared(boat, { botId: "bot-b", homePath: "/tmp/b" }, ctx);
     const c = await provisionPrepared(desktop, { botId: "bot-c", homePath: "/tmp/c" }, ctx);
     const d = await provisionPrepared(novita, { botId: "bot-d", homePath: "/tmp/d" }, ctx);
+    const e = await provisionPrepared(boxd, { botId: "bot-e", homePath: "/tmp/e" }, ctx);
     expect(await drain(fake, a)).toContain("graphical-ok");
     expect(await drain(boat, b)).toContain("graphical-ok");
     expect(await drain(desktop, c)).toContain("graphical-ok");
     expect(await drain(novita, d)).toContain("graphical-ok");
-    expect(new Set([a.id, b.id, c.id, d.id]).size).toBe(4);
+    expect(await drain(boxd, e)).toContain("graphical-ok");
+    expect(new Set([a.id, b.id, c.id, d.id, e.id]).size).toBe(5);
     await fake.destroy(a, ctx);
     await boat.destroy(b, ctx);
     await desktop.destroy(c, ctx);
     await novita.destroy(d, ctx);
+    await boxd.destroy(e, ctx);
   });
 
   it("offers the same observation, action, and workspace contract across providers", async () => {
     const providers: SandboxProvider[] = [
       new FakeSandboxProvider(),
       fakeBoat(),
+      fakeBoxdProvider(),
       emulatedNovita().provider(),
       new DesktopSandboxProvider(),
       new FakeWuyingDesktop().provider(),
@@ -81,6 +87,7 @@ describe("sandbox conformance", () => {
     const providers: SandboxProvider[] = [
       new FakeSandboxProvider(),
       fakeBoat(),
+      fakeBoxdProvider(),
       emulatedNovita().provider(),
       new DesktopSandboxProvider({ root }),
     ];
@@ -250,6 +257,7 @@ describe("sandbox conformance", () => {
     const providers: SandboxProvider[] = [
       new FakeSandboxProvider(),
       fakeBoat(),
+      fakeBoxdProvider(),
       emulatedNovita().provider(),
       new DesktopSandboxProvider({ root }),
     ];

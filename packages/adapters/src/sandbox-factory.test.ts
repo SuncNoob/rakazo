@@ -30,6 +30,7 @@ describe("createSandboxProvider", () => {
     expect(createSandboxProvider("daytona", {}).describe().id).toBe("none");
     expect(createSandboxProvider("createos", {}).describe().id).toBe("none");
     expect(createSandboxProvider("boat", {}).describe().id).toBe("none");
+    expect(createSandboxProvider("boxd", {}).describe().id).toBe("none");
     await expect(
       createSandboxProvider("e2b", {}).provision({ botId: "b", homePath: "/tmp" }, ctx),
     ).rejects.toThrow(/E2B_API_KEY/);
@@ -41,6 +42,9 @@ describe("createSandboxProvider", () => {
     ).toBe("createos");
     expect(createSandboxProvider("boat", { boatApiKey: "test-boat-key" }).describe().id).toBe(
       "boat",
+    );
+    expect(createSandboxProvider("boxd", { boxdApiKey: "test-boxd-key" }).describe().id).toBe(
+      "boxd",
     );
   });
 
@@ -102,7 +106,7 @@ describe("createSandboxProvider", () => {
 
   it("throws on unknown provider", () => {
     expect(() => createSandboxProvider("bogus", {})).toThrow(
-      'Unknown SANDBOX_PROVIDER "bogus". Use none | docker | e2b | novita | daytona | createos | boat | railway | kubernetes | wuying | desktop | fake.',
+      'Unknown SANDBOX_PROVIDER "bogus". Use none | docker | e2b | novita | daytona | createos | boat | boxd | railway | kubernetes | wuying | desktop | fake.',
     );
   });
 });

@@ -10,7 +10,7 @@ for the sharing and persistence contract.
 | --- | --- | --- |
 | Local Docker computers | `SANDBOX_PROVIDER=docker` | `SANDBOX_SUPERVISOR_TOKEN`, computer image, Docker socket for supervisor |
 | UI only, no computers | `SANDBOX_PROVIDER=none` | No provider credential; published-images Compose still requires `SANDBOX_SUPERVISOR_TOKEN` |
-| Managed remote desktop | `e2b` / `novita` / `daytona` / `boat` | `SANDBOX_SUPERVISOR_TOKEN` (published-images Compose), matching API key (and optional URL knobs for Daytona/Boat) |
+| Managed remote desktop | `e2b` / `novita` / `daytona` / `boat` / `boxd` | `SANDBOX_SUPERVISOR_TOKEN` (published-images Compose), matching API key (and optional URL knobs for Daytona/Boat) |
 | One pod per computer on your own cluster | `SANDBOX_PROVIDER=kubernetes` | API and worker running in the cluster, a namespace and a Role that can create, read, delete and exec into pods |
 
 Published-images [Compose](../infra/compose/docker-compose.images.yml) defaults to **`docker`**.
@@ -160,6 +160,7 @@ Set `SANDBOX_PROVIDER` to exactly one of:
 | `novita` | `NOVITA_API_KEY` | Build the desktop template first; optional `SANDBOX_TEMPLATE` |
 | `daytona` | `DAYTONA_API_KEY` | Optional `DAYTONA_API_URL`, `DAYTONA_TARGET`, `DAYTONA_SNAPSHOT` |
 | `boat` | `BOAT_API_KEY` | Optional `BOAT_API_URL` (see `.env.example`) |
+| `boxd` | `BOXD_API_KEY` | Optional `BOXD_ORG` to create computers in a boxd organization |
 | `wuying` | `WUYING_*` (below) | One existing Wuying cloud computer (Windows) |
 
 Remote paths still need a working API/worker; they do not replace Postgres or
@@ -168,7 +169,7 @@ the web UI. They require egress to the provider. For air-gapped hosts prefer
 
 A run starts its computer only when it first uses a computer tool. With idle sleep on,
 a computer suspends after `SANDBOX_IDLE_MS` idle. On providers that bill while running
-(E2B, Daytona, Boat, CreateOS, Railway), it also suspends after `COMPUTER_MAX_ACTIVE_MS`
+(E2B, Daytona, Boat, boxd, CreateOS, Railway), it also suspends after `COMPUTER_MAX_ACTIVE_MS`
 (default 2 hours) up in one stretch, even with background work or an open screen, unless
 a run is executing on it or a user is in control of its screen. `0` turns the cap off.
 That exception lifts only the uptime cap; idle suspension after `SANDBOX_IDLE_MS` still
@@ -299,6 +300,22 @@ first computer, in the Boat account that owns `BOAT_API_KEY`:
 BOAT_API_KEY=<deployment key> pnpm sandbox:boat-snapshot
 ```
 
+### boxd computers
+
+boxd computers are isolated microVMs: no boxd credentials inside, and no route to the
+account's other machines. They start from a snapshot, `rakazo-computer-<hash>`, with the
+desktop tools and Chrome installed, built the same way as Boat's: once in the background
+when missing, from a fresh machine that is deleted afterwards. To build it ahead of the
+first computer:
+
+```bash
+BOXD_API_KEY=<deployment key> pnpm sandbox:boxd-snapshot
+```
+
+The desktop is served on the machine's own public HTTPS address; every screen and terminal
+still needs its own token, which the desktop gateway checks. Stopping a computer suspends it
+with its memory, so programs it was running continue when it resumes.
+
 ## Verify a provider change
 
 After changing provider or keys (from the published-images drop directory that
@@ -309,7 +326,7 @@ docker compose --env-file .env -f docker-compose.images.yml up -d
 curl -fsS http://127.0.0.1:3100/internal/health
 ```
 
-Confirm `sandbox` equals the intended provider (`e2b`, `novita`, `daytona`, or `boat`).
+Confirm `sandbox` equals the intended provider (`e2b`, `novita`, `daytona`, `boat`, or `boxd`).
 HTTP 200 alone does not verify a remote provider: a missing API key falls back to `sandbox: "none"`.
 A present but invalid key still reports the selected provider. Open a bot's computer to verify
 provisioning and desktop access.

@@ -4,7 +4,11 @@ import { signupRequiresEmailVerification } from "@rakazo/core";
 
 export function isRealSandboxProvider(provider = process.env.SANDBOX_PROVIDER) {
   return (
-    provider === "e2b" || provider === "novita" || provider === "daytona" || provider === "boat"
+    provider === "e2b" ||
+    provider === "novita" ||
+    provider === "daytona" ||
+    provider === "boat" ||
+    provider === "boxd"
   );
 }
 

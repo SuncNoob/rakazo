@@ -11,6 +11,7 @@ export function resolveSandboxProvider(source: NodeJS.ProcessEnv = process.env):
   if (requested === "daytona" && !optional(source.DAYTONA_API_KEY)) return "none";
   if (requested === "createos" && !optional(source.CREATEOS_SANDBOX_API_KEY)) return "none";
   if (requested === "boat" && !boatApiKeyFromEnv(source)) return "none";
+  if (requested === "boxd" && !optional(source.BOXD_API_KEY)) return "none";
   if (
     requested === "wuying" &&
     [
@@ -61,6 +62,8 @@ export function sandboxProviderOptionsFromEnv(
   | "railwaySandboxRegion"
   | "boatApiKey"
   | "boatApiUrl"
+  | "boxdApiKey"
+  | "boxdOrg"
   | "kubernetesNamespace"
   | "kubernetesRuntimeClassName"
   | "kubernetesComputerImage"
@@ -99,6 +102,8 @@ export function sandboxProviderOptionsFromEnv(
     railwaySandboxRegion: optional(source.RAILWAY_SANDBOX_REGION),
     boatApiKey: boatApiKeyFromEnv(source),
     boatApiUrl: boatApiUrlFromEnv(source),
+    boxdApiKey: optional(source.BOXD_API_KEY),
+    boxdOrg: optional(source.BOXD_ORG),
     kubernetesNamespace: optional(source.KUBERNETES_SANDBOX_NAMESPACE),
     kubernetesRuntimeClassName: optional(source.KUBERNETES_SANDBOX_RUNTIME_CLASS_NAME),
     kubernetesComputerImage: optional(source.KUBERNETES_SANDBOX_COMPUTER_IMAGE),

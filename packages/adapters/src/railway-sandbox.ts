@@ -31,7 +31,7 @@ import {
   PORTABLE_TRANSFER_BATCH_BYTES,
   shouldSkipPortableWorkspaceFile,
 } from "./computer-workspace.js";
-import { LinuxDesktop, PREPARE_LINUX_DESKTOP } from "./linux-desktop.js";
+import { INSTALL_LINUX_BROWSER, LinuxDesktop, PREPARE_LINUX_DESKTOP } from "./linux-desktop.js";
 import { sandboxCommandArgv } from "./sandbox-command-environment.js";
 import { readBodyCapped } from "./web-ssrf.js";
 
@@ -694,12 +694,6 @@ const PREPARE_RAILWAY_DESKTOP = [
   "set -eu",
   "exec 9>/tmp/rakazo-prepare.lock; flock -w 300 9",
   PREPARE_LINUX_DESKTOP,
-  "if ! command -v google-chrome >/dev/null && ! command -v chromium >/dev/null; then",
-  '  if [ "$(id -u)" -eq 0 ]; then root=""; else root="sudo -n"; fi',
-  "  package=$(mktemp /tmp/rakazo-chrome-XXXXXX.deb)",
-  "  trap 'rm -f \"$package\"' EXIT",
-  '  curl -fsSL https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -o "$package"',
-  '  $root env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$package"',
-  "fi",
+  INSTALL_LINUX_BROWSER,
   `mkdir -p ${WORKSPACE}/.browser-profiles`,
 ].join("\n");

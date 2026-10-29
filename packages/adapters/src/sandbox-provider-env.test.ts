@@ -64,6 +64,16 @@ describe("resolveSandboxProvider", () => {
     });
   });
 
+  it("keeps boxd when its API key is set, with an optional organization", () => {
+    expect(resolveSandboxProvider({ SANDBOX_PROVIDER: "boxd" })).toBe("none");
+    const env = { SANDBOX_PROVIDER: "boxd", BOXD_API_KEY: "test-boxd-key", BOXD_ORG: "team" };
+    expect(resolveSandboxProvider(env)).toBe("boxd");
+    expect(sandboxProviderOptionsFromEnv(env)).toMatchObject({
+      boxdApiKey: "test-boxd-key",
+      boxdOrg: "team",
+    });
+  });
+
   it("keeps CreateOS when its API key is set", () => {
     expect(
       resolveSandboxProvider({
