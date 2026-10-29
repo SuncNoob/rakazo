@@ -118,6 +118,33 @@ Bind it to the service account the API and worker run as with a `RoleBinding`. A
 that admits only the API, worker and web pods to the computer pods, and denies their egress to
 private ranges, is recommended.
 
+## `wuying`
+
+Bot computers run on one existing Wuying (无影) cloud computer. Each computer's home is a folder
+under the desktop user's profile (`%USERPROFILE%\rakazo\<home>`), and the desktop's own disk
+keeps it between stops, so nothing is copied in or out. Commands run in PowerShell; files,
+screenshots and input go through the desktop's MCP gateway. Stopping the computer powers the
+desktop off; deleting it removes only its home folder, never the desktop.
+
+| Variable | Notes |
+| --- | --- |
+| `WUYING_ACCESS_KEY_ID` / `WUYING_ACCESS_KEY_SECRET` | RAM user allowed `ecd:DescribeDesktops`, `ecd:StartDesktops`, `ecd:StopDesktops` and `appstream-center:GetAuthCode`. API and worker only |
+| `WUYING_REGION_ID` | Defaults to `cn-hangzhou` |
+| `WUYING_DESKTOP_ID` | The cloud computer, assigned to the end user below |
+| `WUYING_END_USER_ID` | Screen logins are issued for this user |
+| `WUYING_MCP_URL` / `WUYING_MCP_TOKEN` | The desktop's MCP gateway and its bearer token |
+
+The screen is drawn by the Wuying Web SDK in `/wuying/screen.html`, served by the web app. The
+SDK is not committed; fetch the pinned release before building the web app:
+
+```bash
+node scripts/wuying-web-sdk.mjs
+```
+
+Every bot shares the one desktop, so Private Computers are not isolated from each other on it.
+The gateway bounds each call: a command runs for at most one minute and returns at most 16 KiB
+of output, and a folder listing returns at most 1,000 entries.
+
 ## `none`
 
 Runs API/web without provisioning bot computers.
@@ -132,6 +159,7 @@ Set `SANDBOX_PROVIDER` to exactly one of:
 | `novita` | `NOVITA_API_KEY` | Build the desktop template first; optional `SANDBOX_TEMPLATE` |
 | `daytona` | `DAYTONA_API_KEY` | Optional `DAYTONA_API_URL`, `DAYTONA_TARGET`, `DAYTONA_SNAPSHOT` |
 | `boat` | `BOAT_API_KEY` | Optional `BOAT_API_URL` (see `.env.example`) |
+| `wuying` | `WUYING_*` (below) | One existing Wuying cloud computer (Windows) |
 
 Remote paths still need a working API/worker; they do not replace Postgres or
 the web UI. They require egress to the provider. For air-gapped hosts prefer

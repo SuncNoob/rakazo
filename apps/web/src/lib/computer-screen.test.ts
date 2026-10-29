@@ -103,6 +103,15 @@ describe("embeddableScreenUrl", () => {
     expect(embeddableScreenUrl("http://localhost:6080/vnc.html")).toBeNull();
   });
 
+  it("draws a Wuying desktop in the page that carries its Web SDK", () => {
+    vi.stubGlobal("window", { location: { href: "http://localhost:5173/chat" } });
+    expect(
+      embeddableScreenUrl("wuying://desktop?desktop_id=ecd-1&auth_code=once&view_only=true"),
+    ).toBe(
+      "http://localhost:5173/wuying/screen.html#desktop_id=ecd-1&auth_code=once&view_only=true",
+    );
+  });
+
   it("serves the screen proxy from the page origin", () => {
     vi.stubGlobal("window", { location: { href: "http://localhost:5173/chat" } });
     expect(embeddableScreenUrl("http://127.0.0.1:5173/novnc/session/view/1.x/vnc.html?a=1")).toBe(

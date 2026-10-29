@@ -49,6 +49,7 @@ export const SandboxKind = z.enum([
   "boat",
   "railway",
   "kubernetes",
+  "wuying",
   "desktop",
   "fake",
 ]);

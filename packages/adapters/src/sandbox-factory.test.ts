@@ -67,6 +67,24 @@ describe("createSandboxProvider", () => {
     });
   });
 
+  it("returns the Wuying provider without contacting Alibaba Cloud", () => {
+    const sandbox = createSandboxProvider("wuying", {
+      wuyingAccessKeyId: "test-id",
+      wuyingAccessKeySecret: "test-secret",
+      wuyingDesktopId: "ecd-test",
+      wuyingEndUserId: "test-user",
+      wuyingMcpUrl: "https://gateway.example.com/mcp",
+      wuyingMcpToken: "test-token",
+    });
+    expect(sandbox.describe()).toMatchObject({
+      id: "wuying",
+      capabilities: { graphical: true, takeover: true, persistentHome: true },
+    });
+    expect(createSandboxProvider("wuying", { wuyingAccessKeyId: "test-id" }).describe().id).toBe(
+      "none",
+    );
+  });
+
   it("selects Novita without using E2B credentials", async () => {
     expect(
       createSandboxProvider("novita", { novitaApiKey: "test-novita-key" }).describe(),
@@ -84,7 +102,7 @@ describe("createSandboxProvider", () => {
 
   it("throws on unknown provider", () => {
     expect(() => createSandboxProvider("bogus", {})).toThrow(
-      'Unknown SANDBOX_PROVIDER "bogus". Use none | docker | e2b | novita | daytona | createos | boat | railway | kubernetes | desktop | fake.',
+      'Unknown SANDBOX_PROVIDER "bogus". Use none | docker | e2b | novita | daytona | createos | boat | railway | kubernetes | wuying | desktop | fake.',
     );
   });
 });

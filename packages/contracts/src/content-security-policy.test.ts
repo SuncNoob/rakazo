@@ -8,6 +8,7 @@ import {
   HTML_VIEWER_PATH,
   parseContentSecuritySources,
   parseCrispWebsiteId,
+  WUYING_SCREEN_PATH,
 } from "./content-security-policy.js";
 
 function directives(policy: string) {
@@ -65,6 +66,13 @@ describe("app content security policy", () => {
 
   it("lets only the app frame the HTML viewer shell, whose own meta CSP governs it", () => {
     expect(contentSecurityPolicyFor(HTML_VIEWER_PATH)).toBe("frame-ancestors 'self'");
+  });
+
+  it("lets only the app frame the Wuying screen page and its SDK files", () => {
+    expect(contentSecurityPolicyFor(WUYING_SCREEN_PATH)).toBe("frame-ancestors 'self'");
+    expect(contentSecurityPolicyFor("/wuying/sdk/ASP/container.html")).toBe(
+      "frame-ancestors 'self'",
+    );
   });
 });
 

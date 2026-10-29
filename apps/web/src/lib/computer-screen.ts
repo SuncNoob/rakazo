@@ -1,5 +1,6 @@
 import { t } from "@lingui/core/macro";
 import { isLocalhostOrLoopbackIp } from "@rakazo/contracts";
+import { WUYING_SCREEN_PATH } from "@rakazo/contracts/content-security-policy";
 import { errorText } from "./user-error";
 
 export interface ComputerScreenResult {
@@ -34,6 +35,11 @@ export function embeddableScreenUrl(url: string | null): string | null {
   try {
     const parsed = new URL(url, window.location.href);
     const page = new URL(window.location.href);
+    // A Wuying desktop is drawn by its Web SDK in a page this server serves. Its one-time login
+    // code rides in the fragment so it never reaches a server log.
+    if (parsed.protocol === "wuying:") {
+      return `${page.origin}${WUYING_SCREEN_PATH}#${parsed.searchParams.toString()}`;
+    }
     // The server that served this page proxies /novnc/. Keep the frame on this origin even when the
     // API's WEB_ORIGIN names another host for it (localhost vs 127.0.0.1), as the CSP frames 'self'.
     if (parsed.pathname.startsWith("/novnc/")) {

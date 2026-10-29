@@ -9,6 +9,10 @@
  * app policy the way a srcdoc frame would; its own meta CSP governs it and its nested preview. */
 export const HTML_VIEWER_PATH = "/html-viewer.html";
 
+/** The page that draws a Wuying desktop with its vendor Web SDK, next to the SDK's own files. */
+export const WUYING_SCREEN_PATH = "/wuying/screen.html";
+const WUYING_SCREEN_PREFIX = "/wuying/";
+
 /** Same-origin endpoint browsers send violation reports to, so a blocked resource is not silent. */
 export const CSP_REPORT_PATH = "/api/csp-report";
 const CSP_REPORT_GROUP = "csp";
@@ -134,5 +138,7 @@ export function contentSecurityPolicyFor(
   )
     return null;
   if (pathname === HTML_VIEWER_PATH) return HTML_VIEWER_CONTENT_SECURITY_POLICY;
+  // The Web SDK reaches Wuying's own hosts, which it chooses at runtime; only the app may frame it.
+  if (pathname.startsWith(WUYING_SCREEN_PREFIX)) return HTML_VIEWER_CONTENT_SECURITY_POLICY;
   return appPolicy;
 }
