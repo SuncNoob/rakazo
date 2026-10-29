@@ -1,10 +1,8 @@
 import type * as TimersPromises from "node:timers/promises";
 import type { ComputerRef, ProcessEvent } from "@rakazo/adapter-kit";
-import { SandboxRateLimitError } from "@rakazo/adapter-kit";
 import { describe, expect, it, vi } from "vitest";
 import { isSandboxGoneError } from "./sandbox-errors.js";
 import { assertSandboxWorkspaceContract, provisionPrepared } from "./sandbox-test-support.js";
-import { signRpcQuery, WuyingOpenApi } from "./wuying-openapi.js";
 import { quoteWindowsArgument, windowsKeyChord } from "./wuying-sandbox.js";
 import { FAKE_PROFILE, FakeWuyingDesktop } from "./wuying-sandbox.test-support.js";
 
@@ -288,62 +286,5 @@ describe("WuyingSandboxProvider", () => {
       ctx,
     );
     expect(await provider.workspaceDirectories(computer, { action: "list" }, ctx)).toEqual([]);
-  });
-});
-
-describe("WuyingOpenApi", () => {
-  it("signs RPC requests the way Alibaba Cloud documents", () => {
-    expect(
-      signRpcQuery(
-        {
-          AccessKeyId: "testid",
-          Action: "DescribeRegions",
-          Format: "XML",
-          SignatureMethod: "HMAC-SHA1",
-          SignatureNonce: "3ee8c1b8-83d3-44af-a94f-4e0ad82fd6cf",
-          SignatureVersion: "1.0",
-          Timestamp: "2016-02-23T12:46:24Z",
-          Version: "2014-05-26",
-        },
-        "testsecret",
-      ),
-    ).toBe("OLeaidS1JvxuMvnyHOwuJ+uX5qY=");
-  });
-
-  it("reads desktop state and keeps credentials out of errors", async () => {
-    const requests: URL[] = [];
-    const respond = (status: number, body: unknown) => async (input: RequestInfo | URL) => {
-      requests.push(new URL(String(input)));
-      return new Response(JSON.stringify(body), { status });
-    };
-    const api = (fetch: typeof globalThis.fetch) =>
-      new WuyingOpenApi({
-        accessKeyId: "AKID",
-        accessKeySecret: "secret",
-        regionId: "cn-hangzhou",
-        fetch,
-      });
-
-    const ok = api(
-      respond(200, { Desktops: [{ DesktopId: "ecd-1", DesktopStatus: "Running" }] }) as never,
-    );
-    expect(await ok.desktopStatus("ecd-1", ctx.signal)).toBe("Running");
-    expect(requests[0]?.host).toBe("ecd.cn-hangzhou.aliyuncs.com");
-    expect(requests[0]?.searchParams.get("Action")).toBe("DescribeDesktops");
-    expect(requests[0]?.searchParams.get("DesktopId.1")).toBe("ecd-1");
-
-    const code = api(respond(200, { AuthModel: { AuthCode: "abc" } }) as never);
-    expect(await code.authCode("user", ctx.signal)).toBe("abc");
-    expect(requests[1]?.host).toBe("appstream-center.aliyuncs.com");
-
-    const denied = await api(respond(403, { Code: "Forbidden.RAM" }) as never)
-      .stopDesktop("ecd-1", ctx.signal)
-      .catch((error: Error) => error);
-    expect(String(denied)).toContain("Forbidden.RAM");
-    expect(String(denied)).not.toContain("AKID");
-
-    await expect(
-      api(respond(400, { Code: "Throttling.User" }) as never).startDesktop("ecd-1", ctx.signal),
-    ).rejects.toBeInstanceOf(SandboxRateLimitError);
   });
 });

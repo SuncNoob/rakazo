@@ -13,6 +13,38 @@ export const HTML_VIEWER_PATH = "/html-viewer.html";
 export const WUYING_SCREEN_PATH = "/wuying/screen.html";
 const WUYING_SCREEN_PREFIX = "/wuying/";
 
+// The vendor runs only in opaque frames, including if this page is opened directly.
+// No app-origin fetches, forms, objects or top-level navigation. Inline hashes cover only
+// the pinned container's focus guard, version marker and click listener.
+const WUYING_CONTENT_SECURITY_POLICY = serialize({
+  "default-src": ["'none'"],
+  sandbox: ["allow-scripts", "allow-pointer-lock"],
+  "script-src": [
+    "'self'",
+    "'wasm-unsafe-eval'",
+    "blob:",
+    "https://g.alicdn.com",
+    "'sha256-YWDKpAXTqwkBgKv52boPcHHeIFM0KgmGRB7P5BAYG1g='",
+    "'sha256-rukASNY1jEwwaAb4qYHy6q+Vz2CBb8DRFWqOn3yc534='",
+    "'sha256-QrA3rhcCnVi1raBBazigw1S+co1eZTAaQED3N3leMaw='",
+  ],
+  "style-src": ["'unsafe-inline'", "https://g.alicdn.com"],
+  "img-src": ["data:", "blob:", "https://img.alicdn.com", "https://gw.alicdn.com"],
+  "font-src": ["data:", "https://g.alicdn.com"],
+  "media-src": ["blob:"],
+  "connect-src": [
+    "https://*.aliyuncs.com",
+    "wss://*.aliyuncs.com",
+    "https://eds.aliyun.com",
+    "https://eds-intl.aliyun.com",
+    "https://g.alicdn.com",
+  ],
+  "worker-src": ["blob:"],
+  "frame-src": ["'self'"],
+  "base-uri": ["'none'"],
+  "form-action": ["'none'"],
+});
+
 /** Same-origin endpoint browsers send violation reports to, so a blocked resource is not silent. */
 export const CSP_REPORT_PATH = "/api/csp-report";
 const CSP_REPORT_GROUP = "csp";
@@ -138,7 +170,10 @@ export function contentSecurityPolicyFor(
   )
     return null;
   if (pathname === HTML_VIEWER_PATH) return HTML_VIEWER_CONTENT_SECURITY_POLICY;
-  // The Web SDK reaches Wuying's own hosts, which it chooses at runtime; only the app may frame it.
-  if (pathname.startsWith(WUYING_SCREEN_PREFIX)) return HTML_VIEWER_CONTENT_SECURITY_POLICY;
+  if (pathname === WUYING_SCREEN_PATH)
+    return `${WUYING_CONTENT_SECURITY_POLICY}; frame-ancestors 'self'`;
+  // The nested runtime has an opaque ancestor, which cannot match 'self'. Its sandbox
+  // policy still prevents access to the app even when visited directly.
+  if (pathname.startsWith(WUYING_SCREEN_PREFIX)) return WUYING_CONTENT_SECURITY_POLICY;
   return appPolicy;
 }

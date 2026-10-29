@@ -370,7 +370,7 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
   });
   const sandbox: SandboxProvider =
     sandboxOverride ??
-    createRunSandbox(env.sandboxProvider, {
+    (await createRunSandbox(env.sandboxProvider, {
       ...sandboxProviderOptionsFromEnv(),
       supervisorUrl: env.sandboxSupervisorUrl,
       supervisorToken: env.sandboxSupervisorToken,
@@ -384,7 +384,7 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
       boatApiUrl: env.boatApiUrl,
       dataDir: env.dataDir,
       prisma,
-    });
+    }));
   const mcpOAuth = new McpOAuthBroker(
     prisma,
     secrets,

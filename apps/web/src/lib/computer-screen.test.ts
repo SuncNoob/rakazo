@@ -108,6 +108,16 @@ describe("sameWuyingScreen", () => {
   });
 });
 
+describe("Wuying frame isolation", () => {
+  it("sandboxes the vendor page without same-origin access and uses frame state probing", () => {
+    vi.stubGlobal("window", { location: { href: "https://app.example/chat" } });
+    const url = embeddableScreenUrl("wuying://desktop?auth_code=fake-once&desktop_id=ecd-fake");
+    expect(screenIframeSandbox(url)).toBe("allow-scripts allow-pointer-lock");
+    expect(isProxiedScreenUrl(url)).toBe(true);
+    vi.unstubAllGlobals();
+  });
+});
+
 describe("embeddableScreenUrl", () => {
   afterEach(() => {
     vi.unstubAllGlobals();

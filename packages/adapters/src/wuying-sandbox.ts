@@ -104,14 +104,20 @@ export class WuyingMcpTools implements WuyingDesktopTools {
   constructor(private readonly options: { url: string; token: string }) {}
 
   async call(tool: string, args: Record<string, unknown>, signal: AbortSignal) {
-    const session = await this.connect(signal);
+    let session: McpSession;
+    try {
+      session = await this.connect(signal);
+    } catch {
+      if (signal.aborted) throw signal.reason;
+      throw new SandboxUnresponsiveError("The computer gateway could not be reached");
+    }
     let result: Awaited<ReturnType<McpSession["callTool"]>>;
     try {
       result = await session.callTool(`${SYSTEM_TOOLS}${tool}`, args, { signal });
-    } catch (error) {
+    } catch {
       if (signal.aborted) throw signal.reason;
       this.reset(session);
-      throw new SandboxUnresponsiveError(`The computer did not answer ${tool}`, { cause: error });
+      throw new SandboxUnresponsiveError(`The computer did not answer ${tool}`);
     }
     const content = Array.isArray(result.content) ? result.content : [];
     const text = content
@@ -122,8 +128,10 @@ export class WuyingMcpTools implements WuyingDesktopTools {
       | { data?: unknown; error?: { code?: string; message?: string } }
       | undefined;
     if (result.isError || structured?.error) {
-      const message = structured?.error?.message ?? (text.slice(0, 500) || "failed");
-      throw new WuyingToolError(tool, structured?.error?.code, `${tool}: ${message}`);
+      // Transport and gateway errors can echo the bearer token. Preserve only the error
+      // kind needed for file existence checks, never an untrusted message or response body.
+      const code = structured?.error?.code === "not_found" ? "not_found" : undefined;
+      throw new WuyingToolError(tool, code, `${tool} failed`);
     }
     return {
       data: structured?.data ?? parseData(text),

@@ -68,11 +68,17 @@ describe("app content security policy", () => {
     expect(contentSecurityPolicyFor(HTML_VIEWER_PATH)).toBe("frame-ancestors 'self'");
   });
 
-  it("lets only the app frame the Wuying screen page and its SDK files", () => {
-    expect(contentSecurityPolicyFor(WUYING_SCREEN_PATH)).toBe("frame-ancestors 'self'");
-    expect(contentSecurityPolicyFor("/wuying/sdk/ASP/container.html")).toBe(
-      "frame-ancestors 'self'",
-    );
+  it("isolates Wuying documents without widening the app policy", () => {
+    const screen = directives(contentSecurityPolicyFor(WUYING_SCREEN_PATH)!);
+    expect(screen.get("sandbox")).toEqual(["allow-scripts", "allow-pointer-lock"]);
+    expect(screen.get("frame-ancestors")).toEqual(["'self'"]);
+    expect(screen.get("connect-src")).not.toContain("'self'");
+    expect(screen.get("script-src")).not.toContain("'unsafe-eval'");
+    expect(screen.get("script-src")).toContain("'wasm-unsafe-eval'");
+    const nested = directives(contentSecurityPolicyFor("/wuying/sdk/ASP/container.html")!);
+    expect(nested.get("sandbox")).toEqual(screen.get("sandbox"));
+    expect(nested.get("frame-ancestors")).toBeUndefined();
+    expect(contentSecurityPolicyFor("/chat")).toBe(APP_CONTENT_SECURITY_POLICY);
   });
 });
 

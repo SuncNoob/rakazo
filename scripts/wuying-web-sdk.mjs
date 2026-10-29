@@ -26,6 +26,9 @@ for (const [file, sha256] of Object.entries(FILES)) {
   const actual = createHash("sha256").update(body).digest("hex");
   if (actual !== sha256) throw new Error(`${file}: checksum ${actual} does not match ${sha256}`);
   await mkdir(path.dirname(path.join(target, file)), { recursive: true });
-  await writeFile(path.join(target, file), body);
+  const content = file.endsWith(".html")
+    ? body.toString("utf8").replace("<head>", '<head><script src="../../storage.js"></script>')
+    : body;
+  await writeFile(path.join(target, file), content);
   console.log(`${file} (${VERSION})`);
 }

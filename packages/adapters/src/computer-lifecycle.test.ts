@@ -41,6 +41,41 @@ const context = {
 } satisfies AdapterContext;
 
 describe("computer provisioning", () => {
+  it.each([
+    { kind: "wuying", selected: "fake", state: "running" },
+    { kind: "wuying", selected: "wuying", state: "stopped" },
+    { kind: "docker", selected: "wuying", state: "stopped" },
+  ])(
+    "refuses Private Computers before any Wuying start or reconnect ($kind/$selected/$state)",
+    async ({ kind, selected, state }) => {
+      const provision = vi.fn();
+      const isRunning = vi.fn();
+      const updateMany = vi.fn();
+      const deps = {
+        prisma: {
+          computer: {
+            findUniqueOrThrow: vi.fn().mockResolvedValue({ kind, state, scope: "dedicated" }),
+            updateMany,
+          },
+        } as unknown as PrismaClient,
+        sandbox: {
+          describe: () => ({ id: selected }),
+          provision,
+          isRunning,
+        } as unknown as SandboxProvider,
+        home: {} as AgentHomeStore,
+        jobs: {} as JobPublisher,
+        events: {} as ThreadEvents,
+      };
+      await expect(provisionComputer(deps, "private-computer", context)).rejects.toThrow(
+        "Wuying supports Team Computers only. Select a Team Computer instead of a Private Computer.",
+      );
+      expect(provision).not.toHaveBeenCalled();
+      expect(isRunning).not.toHaveBeenCalled();
+      expect(updateMany).not.toHaveBeenCalled();
+    },
+  );
+
   it("stops a provider when archive invalidates its boot claim", async () => {
     const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-provision-race-"));
     const stop = vi.fn().mockResolvedValue(undefined);

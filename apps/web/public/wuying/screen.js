@@ -2,14 +2,10 @@
 // the /novnc screen pages do, through { rakazoScreen } messages to the parent frame.
 (() => {
   const params = new URLSearchParams(window.location.hash.slice(1));
-  // The login code works once; keep it out of history and anything that reads the URL later.
-  window.history.replaceState(null, "", window.location.pathname);
+  // Opaque frames cannot rewrite a URL with history.replaceState. The fragment is never sent
+  // in HTTP requests or Referer headers.
 
-  const report = (state, detail) =>
-    window.parent.postMessage(
-      detail ? { rakazoScreen: state, detail } : { rakazoScreen: state },
-      "*",
-    );
+  const report = (state) => window.parent.postMessage({ rakazoScreen: state }, "*");
 
   const desktopId = params.get("desktop_id");
   const regionId = params.get("region_id") || "cn-hangzhou";
@@ -25,6 +21,7 @@
     iframeId: "session",
     openType: "inline",
     resourceType: "local",
+    logDisabled: true,
     connectType: "desktop",
     regionId,
     userInfo: { authCode },
@@ -37,7 +34,7 @@
   });
   session.addHandle("onDisConnected", () => report("disconnected"));
   session.addHandle("getConnectionTicketInfo", (data) => {
-    if (data?.status === "error") report("failed", typeof data.Code === "string" ? data.Code : "");
+    if (data?.status === "error") report("failed");
   });
   session.addHandle("onError", () => report("failed"));
   window.addEventListener("message", (event) => {

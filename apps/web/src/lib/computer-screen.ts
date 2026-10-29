@@ -78,7 +78,8 @@ export function sameWuyingScreen(current: string | null, next: string | null): b
 export function screenIframeSandbox(url: string | null) {
   if (!url) return undefined;
   try {
-    return new URL(url, window.location.href).pathname.startsWith("/novnc/")
+    const pathname = new URL(url, window.location.href).pathname;
+    return pathname.startsWith("/novnc/") || pathname === WUYING_SCREEN_PATH
       ? "allow-scripts allow-pointer-lock"
       : undefined;
   } catch {

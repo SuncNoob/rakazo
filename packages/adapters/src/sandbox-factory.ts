@@ -12,7 +12,6 @@ import { KubernetesSandboxProvider } from "./kubernetes-sandbox.js";
 import { NoneSandboxProvider } from "./none-sandbox.js";
 import { NovitaSandboxProvider } from "./novita-sandbox.js";
 import { RailwaySandboxProvider } from "./railway-sandbox.js";
-import { WuyingSandboxProvider } from "./wuying-sandbox.js";
 
 export interface SandboxProviderOptions {
   hostComputerUrl?: string;
@@ -68,7 +67,10 @@ function missingRemoteKey(
   );
 }
 
-export function createSandboxProvider(kind: string, opts: SandboxProviderOptions): SandboxProvider {
+export async function createSandboxProvider(
+  kind: string,
+  opts: SandboxProviderOptions,
+): Promise<SandboxProvider> {
   switch (kind) {
     case "none":
     case "":
@@ -140,6 +142,7 @@ export function createSandboxProvider(kind: string, opts: SandboxProviderOptions
       };
       const missing = Object.entries(required).find(([, value]) => !value?.trim());
       if (missing) return missingRemoteKey("wuying", missing[0]);
+      const { WuyingSandboxProvider } = await import("./wuying-sandbox.js");
       return WuyingSandboxProvider.fromOptions({
         accessKeyId: opts.wuyingAccessKeyId ?? "",
         accessKeySecret: opts.wuyingAccessKeySecret ?? "",
