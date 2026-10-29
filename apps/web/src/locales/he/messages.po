@@ -171,6 +171,10 @@ msgstr "{commandVariable} שמור ואי אפשר להשתמש בו כמשתנ�
 msgid "{connectedCount, plural, one {# connected} other {# connected}}"
 msgstr ""
 
+#: src/pages/shell/message-view.tsx
+msgid "{count, plural, one {# message with {peer}} other {# messages with {peer}}}"
+msgstr "{count, plural, one {הודעה אחת עם {peer}} two {# הודעות עם {peer}} other {# הודעות עם {peer}}}"
+
 #: src/components/markdown-copy.tsx
 msgid "{count, plural, one {# row} other {# rows}}"
 msgstr "{count, plural, one {# שורה} other {# שורות}}"
@@ -1342,7 +1346,6 @@ msgstr "מנקה…"
 #: src/pages/KnowledgeSection.tsx
 #: src/pages/MessagingSettingsPanel.tsx
 #: src/pages/ModelSettingsOverlay.tsx
-#: src/pages/PeerMessagesOverlay.tsx
 #: src/pages/RoutineEditor.tsx
 #: src/pages/shell/avatar-studio-popover.tsx
 #: src/pages/WindowChrome.tsx
@@ -1352,6 +1355,10 @@ msgstr "סגירה"
 #: src/pages/shell/message-cards.tsx
 msgid "Close chart"
 msgstr "סגירת התרשים"
+
+#: src/pages/PeerMessagesOverlay.tsx
+msgid "Close Chat"
+msgstr "סגירת הצ׳אט"
 
 #: src/pages/shell/computer-overlay.tsx
 msgid "Close computer"
@@ -1427,10 +1434,6 @@ msgstr "קוד"
 #: src/pages/shell/sidebar-roster.tsx
 msgid "Collapse {0}"
 msgstr "כיווץ {0}"
-
-#: src/pages/shell/message-view.tsx
-msgid "Collapse {label}"
-msgstr "כיווץ {label}"
 
 #: src/pages/shell/avatar-studio-popover.tsx
 msgid "Color"
@@ -2819,10 +2822,6 @@ msgstr "הרחבה"
 #: src/pages/shell/sidebar-roster.tsx
 msgid "Expand {0}"
 msgstr "הרחבת {0}"
-
-#: src/pages/shell/message-view.tsx
-msgid "Expand {label}"
-msgstr "הרחבת {label}"
 
 #: src/components/markdown-copy.tsx
 msgid "Expand table"
@@ -5790,10 +5789,6 @@ msgstr "לא ניתן לבטל פעולה זו."
 #: src/pages/shell/dialogs.tsx
 msgid "This cannot be undone."
 msgstr "לא ניתן לבטל פעולה זו."
-
-#: src/pages/PeerMessagesOverlay.tsx
-msgid "This chat is view-only"
-msgstr "הצ׳אט הזה לקריאה בלבד"
 
 #: src/pages/HostComputerPrompt.tsx
 msgid "this computer"

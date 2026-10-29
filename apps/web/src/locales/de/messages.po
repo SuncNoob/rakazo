@@ -171,6 +171,10 @@ msgstr "{commandVariable} ist reserviert und kann nicht als Befehlsvariable verw
 msgid "{connectedCount, plural, one {# connected} other {# connected}}"
 msgstr ""
 
+#: src/pages/shell/message-view.tsx
+msgid "{count, plural, one {# message with {peer}} other {# messages with {peer}}}"
+msgstr "{count, plural, one {# Nachricht mit {peer}} other {# Nachrichten mit {peer}}}"
+
 #: src/components/markdown-copy.tsx
 msgid "{count, plural, one {# row} other {# rows}}"
 msgstr "{count, plural, one {# Zeile} other {# Zeilen}}"
@@ -1342,7 +1346,6 @@ msgstr "Wird geleert…"
 #: src/pages/KnowledgeSection.tsx
 #: src/pages/MessagingSettingsPanel.tsx
 #: src/pages/ModelSettingsOverlay.tsx
-#: src/pages/PeerMessagesOverlay.tsx
 #: src/pages/RoutineEditor.tsx
 #: src/pages/shell/avatar-studio-popover.tsx
 #: src/pages/WindowChrome.tsx
@@ -1352,6 +1355,10 @@ msgstr "Schließen"
 #: src/pages/shell/message-cards.tsx
 msgid "Close chart"
 msgstr "Diagramm schließen"
+
+#: src/pages/PeerMessagesOverlay.tsx
+msgid "Close Chat"
+msgstr "Chat schließen"
 
 #: src/pages/shell/computer-overlay.tsx
 msgid "Close computer"
@@ -1427,10 +1434,6 @@ msgstr "Code"
 #: src/pages/shell/sidebar-roster.tsx
 msgid "Collapse {0}"
 msgstr ""
-
-#: src/pages/shell/message-view.tsx
-msgid "Collapse {label}"
-msgstr "{label} einklappen"
 
 #: src/pages/shell/avatar-studio-popover.tsx
 msgid "Color"
@@ -2819,10 +2822,6 @@ msgstr "Erweitern"
 #: src/pages/shell/sidebar-roster.tsx
 msgid "Expand {0}"
 msgstr ""
-
-#: src/pages/shell/message-view.tsx
-msgid "Expand {label}"
-msgstr "{label} erweitern"
 
 #: src/components/markdown-copy.tsx
 msgid "Expand table"
@@ -5790,10 +5789,6 @@ msgstr "Das kann nicht rückgängig gemacht werden."
 #: src/pages/shell/dialogs.tsx
 msgid "This cannot be undone."
 msgstr "Dies kann nicht rückgängig gemacht werden."
-
-#: src/pages/PeerMessagesOverlay.tsx
-msgid "This chat is view-only"
-msgstr "Dieser Chat ist schreibgeschützt"
 
 #: src/pages/HostComputerPrompt.tsx
 msgid "this computer"

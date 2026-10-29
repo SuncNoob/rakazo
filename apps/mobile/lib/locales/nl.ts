@@ -57,6 +57,8 @@ export const NL_MESSAGES: Record<string, string> = {
   Next: "Volgende",
   "Ex: Project Falcon": "Bijv. Project Falcon",
   "Search bots": "Bots zoeken",
+  "Close Chat": "Chat sluiten",
+  "{count} messages with {peer}": "{count} berichten met {peer}",
   "About {label}": "Over {label}",
   "Manage the bots it creates": "De bots beheren die deze bot maakt",
   "Allow cross-space bot communication":
@@ -543,7 +545,6 @@ export const NL_MESSAGES: Record<string, string> = {
   "Add {name}": "{name} toevoegen",
   Added: "Toegevoegd",
   Back: "Terug",
-  "Bearer authentication": "Bearer-authenticatie",
   "Bearer token": "Bearer-token",
   "Connect Executor": "Executor koppelen",
   "Connect Treg": "Treg koppelen",
@@ -562,7 +563,6 @@ export const NL_MESSAGES: Record<string, string> = {
   "GraphQL endpoint": "GraphQL-eindpunt",
   "Loading tools…": "Tools laden…",
   "No apps match your search.": "Geen apps komen overeen met je zoekopdracht.",
-  "No authentication": "Geen authenticatie",
   "No tools available.": "Geen tools beschikbaar.",
   "Not in the plugin catalog": "Niet in de plugincatalogus",
   "OpenAPI JSON": "OpenAPI-JSON",
@@ -936,6 +936,7 @@ export const NL_MESSAGES: Record<string, string> = {
   "OAuth expired": "OAuth verlopen",
   "Needs an OAuth client ID": "OAuth-client-ID nodig",
   "Credential saved": "Inloggegevens opgeslagen",
+  Authentication: "Authenticatiemethode",
   "No auth": "Geen authenticatie",
   "The bot couldn't reply because its provider's daily limit was reached.":
     "De bot kon niet antwoorden omdat de daglimiet van zijn provider is bereikt.",
@@ -1104,6 +1105,13 @@ export const NL_MESSAGES: Record<string, string> = {
   "{from} to {to}": "{from} tot {to}",
   "Every {day}": "Elke {day}",
   "Every {days} and {last}": "Elke {days} en {last}",
+
+  // Native remote MCP authentication controls.
+  "API key header name": "Naam van API-sleutelheader",
+  Bearer: "Bearer",
+  "Connect OAuth": "Verbinden via OAuth",
+  "Could not start MCP OAuth": "Kan MCP OAuth niet starten",
+  OAuth: "OAuth",
   "Always open {site}": "{site} altijd openen",
   "Trusted sites": "Vertrouwde sites",
   "Run history": "Rungeschiedenis",
@@ -1208,4 +1216,9 @@ export const NL_MESSAGES: Record<string, string> = {
   "1 free month earned": "1 gratis maand verdiend",
   "{count} free months earned": "{count} gratis maanden verdiend",
   "Submit a plugin": "Plugin indienen",
+};
+
+export const PEER_MESSAGE_FORMS: Partial<Record<Intl.LDMLPluralRule, string>> = {
+  other: NL_MESSAGES["{count} messages with {peer}"],
+  one: "{count} bericht met {peer}",
 };

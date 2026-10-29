@@ -1,7 +1,7 @@
 import { ChatMarkdown, withBlockMentions } from "@rakazo/chat-ui/native";
 import type { LoginFieldInput, MessageBlock } from "@rakazo/contracts";
 import { isAttachmentAudioMimeType } from "@rakazo/contracts";
-import type { ChildBotBlock } from "@rakazo/core";
+import type { ChildBotBlock, PeerExchange } from "@rakazo/core";
 import {
   formatFileSize,
   isApprovalAskBlock,
@@ -23,7 +23,6 @@ import { t, useI18n } from "../../lib/i18n";
 import { isInlineImageMimeType } from "../../lib/inline-image";
 import { messagePresentationSegments } from "../../lib/message-presentation";
 import { useResolvedAppearance } from "../../lib/native";
-import { peerChipPress } from "../../lib/peer-chip";
 import { speakerColorFor } from "../../lib/thread-message-text";
 import type { UserBubble } from "../../lib/user-bubble";
 import { withUserBubble } from "../../lib/user-bubble";
@@ -31,7 +30,6 @@ import { errorText } from "../../lib/user-error";
 import { AppConnectCard } from "../AppConnectCard";
 import { AskActions } from "../AskActions";
 import { AudioAttachment } from "../audio-attachment";
-import { BotAvatar } from "../bot-avatar";
 import { MessageMentions } from "../bot-mention";
 import { ChoiceCard } from "../ChoiceCard";
 import { ComputerCard } from "../ComputerCard";
@@ -42,6 +40,7 @@ import { McpApprovalCard } from "../McpApprovalCard";
 import type { MarkdownArtifactPreviewTarget } from "../markdown-artifact-preview";
 import { MessageCaption } from "../message-caption";
 import { NativeSymbol } from "../native-symbol";
+import { PeerReceiptLine } from "../peer-receipt-line";
 import { AskBlock } from "./ask-block";
 import type { MessageRowActions } from "./message-row";
 import { isSpecialMessageBlock, SpecialMessageCard } from "./special-message-card";
@@ -159,8 +158,7 @@ const MessageBubbleContent = memo(function MessageBubbleContent({
   onChoiceDismissed,
   onPreviewMarkdown,
   onPreviewImage,
-  peerReplies,
-  onTogglePeerReplies,
+  peerExchange,
   onOpenPeerChat,
   actionProps,
   doubleTapSurface = false,
@@ -188,8 +186,7 @@ const MessageBubbleContent = memo(function MessageBubbleContent({
   onChoiceDismissed?: (question: string) => void;
   onPreviewMarkdown: (target: MarkdownArtifactPreviewTarget) => void;
   onPreviewImage: (target: ImageArtifactPreviewTarget) => void;
-  peerReplies?: "collapsed" | "expanded";
-  onTogglePeerReplies: (markerId: string) => void;
+  peerExchange?: PeerExchange;
   onOpenPeerChat: (peer: { peerBotId: string; peerBotName: string }) => void;
   actionProps: MessageActionProps;
   doubleTapSurface?: boolean;
@@ -288,70 +285,24 @@ const MessageBubbleContent = memo(function MessageBubbleContent({
     const sent = peerMessage.kind === "bot_message_sent";
     const peer = sent ? peerMessage.toBotName : peerMessage.fromBotName;
     const peerBotId = sent ? peerMessage.toBotId : peerMessage.fromBotId;
-    const label = sent
-      ? t("Messaged {peer}", { peer: peer ?? t("Bot") })
-      : t("Message from {peer}", { peer: peer ?? t("Bot") });
-    const peerAvatarSet =
-      bots.find((bot) => bot.id === peerBotId)?.avatarSet ??
-      members?.find((member) => member.botId === peerBotId)?.avatarSet;
-    const peerColor =
-      bots.find((bot) => bot.id === peerBotId)?.color ??
-      members?.find((member) => member.botId === peerBotId)?.color ??
-      tokens.mutedForeground;
-    // A received chip with folded replies expands them in place; otherwise, in a bot's own chat,
-    // the chip opens the view-only bot-to-bot exchange, as on web.
-    const replies = sent ? undefined : peerReplies;
-    const press = peerChipPress({
-      sent,
-      replies,
-      threadBotId: groupId ? undefined : botId,
-      peerBotId,
-    });
+    const peerBot = bots.find((bot) => bot.id === peerBotId);
+    const peerMember = members?.find((member) => member.botId === peerBotId);
+    const peerColor = peerBot?.color ?? peerMember?.color ?? tokens.mutedForeground;
     return (
-      <Pressable
-        {...actionProps}
-        accessible
+      <PeerReceiptLine
+        peerBotId={peerBotId}
+        peerBotName={peerExchange?.peerBotName ?? peer ?? t("Bot")}
+        color={peerColor}
+        avatarSet={peerBot?.avatarSet ?? peerMember?.avatarSet}
+        count={peerExchange?.count ?? 1}
+        direction={sent ? "sent" : "received"}
+        actionProps={actionProps}
         onPress={
-          press === "toggle"
-            ? () => onTogglePeerReplies(message.id)
-            : press === "open"
-              ? () => onOpenPeerChat({ peerBotId, peerBotName: peer ?? t("Bot") })
-              : undefined
+          !groupId && botId && peerBotId !== botId
+            ? () => onOpenPeerChat({ peerBotId, peerBotName: peer ?? t("Bot") })
+            : undefined
         }
-        accessibilityRole={press ? "button" : undefined}
-        accessibilityState={replies ? { expanded: replies === "expanded" } : undefined}
-        accessibilityLabel={
-          replies === "expanded"
-            ? t("Hide {label}", { label })
-            : replies === "collapsed"
-              ? t("Show {label}", { label })
-              : label
-        }
-        style={{
-          width: "100%",
-          paddingVertical: 4,
-          alignItems: "center",
-          justifyContent: "center",
-          flexDirection: "row",
-          gap: 6,
-        }}
-      >
-        <BotAvatar color={peerColor} avatarSet={peerAvatarSet} identity={peerBotId} size={16} />
-        <Text
-          numberOfLines={1}
-          style={{ color: tokens.mutedForeground, fontSize: 13.5, flexShrink: 1 }}
-        >
-          {label}
-        </Text>
-        {press ? (
-          <NativeSymbol
-            ios={replies === "expanded" ? "chevron.down" : "chevron.right"}
-            android={replies === "expanded" ? "chevron-down" : "chevron-forward"}
-            size={12}
-            color={tokens.mutedForeground}
-          />
-        ) : null}
-      </Pressable>
+      />
     );
   }
   const channelMessage = message.blocks.find(

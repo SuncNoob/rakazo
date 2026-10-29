@@ -231,7 +231,6 @@ function fallbackIncompatibility(
   candidate: RuntimeModelTarget,
   context: TranscriptContext,
   options: ModelsSimpleStreamOptions | undefined,
-  requestedThinkingLevel: AgentRunRequest["model"]["thinkingLevel"],
   tools: readonly ConnectorTool[],
 ): string | undefined {
   // The backup's own context policy prunes on its first call; judge what it would send. Too
@@ -273,12 +272,10 @@ function fallbackIncompatibility(
   ) {
     return "The request exceeds the backup model's image limit.";
   }
-  const reasoningLevel = options?.reasoning ?? requestedThinkingLevel;
-  const requiresReasoning =
-    (reasoningLevel !== undefined && reasoningLevel !== null && reasoningLevel !== "off") ||
-    (candidate.config.thinkingLevel !== undefined &&
-      candidate.config.thinkingLevel !== null &&
-      candidate.config.thinkingLevel !== "off");
+  // The primary's thinking level does not count: a backup without reasoning runs with thinking off.
+  const requiresReasoning = Boolean(
+    candidate.config.thinkingLevel && candidate.config.thinkingLevel !== "off",
+  );
   return requiresReasoning && !candidate.model.reasoning
     ? "The backup model does not support the requested thinking level."
     : undefined;
@@ -401,7 +398,6 @@ export function fallbackAwareModelStream(
           candidate,
           requestContext(true),
           options,
-          state.request.model.thinkingLevel,
           state.request.tools,
         );
         if (incompatibility) {

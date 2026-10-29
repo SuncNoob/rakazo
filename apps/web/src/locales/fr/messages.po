@@ -171,6 +171,10 @@ msgstr "{commandVariable} est réservée et ne peut pas être utilisée comme va
 msgid "{connectedCount, plural, one {# connected} other {# connected}}"
 msgstr ""
 
+#: src/pages/shell/message-view.tsx
+msgid "{count, plural, one {# message with {peer}} other {# messages with {peer}}}"
+msgstr "{count, plural, one {# message avec {peer}} other {# messages avec {peer}}}"
+
 #: src/components/markdown-copy.tsx
 msgid "{count, plural, one {# row} other {# rows}}"
 msgstr "{count, plural, one {# ligne} other {# lignes}}"
@@ -1342,7 +1346,6 @@ msgstr "Effacement en cours…"
 #: src/pages/KnowledgeSection.tsx
 #: src/pages/MessagingSettingsPanel.tsx
 #: src/pages/ModelSettingsOverlay.tsx
-#: src/pages/PeerMessagesOverlay.tsx
 #: src/pages/RoutineEditor.tsx
 #: src/pages/shell/avatar-studio-popover.tsx
 #: src/pages/WindowChrome.tsx
@@ -1352,6 +1355,10 @@ msgstr "Fermer"
 #: src/pages/shell/message-cards.tsx
 msgid "Close chart"
 msgstr "Fermer le graphique"
+
+#: src/pages/PeerMessagesOverlay.tsx
+msgid "Close Chat"
+msgstr "Fermer le chat"
 
 #: src/pages/shell/computer-overlay.tsx
 msgid "Close computer"
@@ -1427,10 +1434,6 @@ msgstr "Code"
 #: src/pages/shell/sidebar-roster.tsx
 msgid "Collapse {0}"
 msgstr "Réduire {0}"
-
-#: src/pages/shell/message-view.tsx
-msgid "Collapse {label}"
-msgstr "Réduire {label}"
 
 #: src/pages/shell/avatar-studio-popover.tsx
 msgid "Color"
@@ -2819,10 +2822,6 @@ msgstr "Développer"
 #: src/pages/shell/sidebar-roster.tsx
 msgid "Expand {0}"
 msgstr "Développer {0}"
-
-#: src/pages/shell/message-view.tsx
-msgid "Expand {label}"
-msgstr "Développer {label}"
 
 #: src/components/markdown-copy.tsx
 msgid "Expand table"
@@ -5790,10 +5789,6 @@ msgstr "Cette action est irréversible."
 #: src/pages/shell/dialogs.tsx
 msgid "This cannot be undone."
 msgstr "Cette action est irréversible."
-
-#: src/pages/PeerMessagesOverlay.tsx
-msgid "This chat is view-only"
-msgstr "Cette conversation est en lecture seule"
 
 #: src/pages/HostComputerPrompt.tsx
 msgid "this computer"

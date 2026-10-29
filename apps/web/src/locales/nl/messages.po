@@ -171,6 +171,10 @@ msgstr "{commandVariable} is gereserveerd en kan niet als commandovariabele word
 msgid "{connectedCount, plural, one {# connected} other {# connected}}"
 msgstr ""
 
+#: src/pages/shell/message-view.tsx
+msgid "{count, plural, one {# message with {peer}} other {# messages with {peer}}}"
+msgstr "{count, plural, one {# bericht met {peer}} other {# berichten met {peer}}}"
+
 #: src/components/markdown-copy.tsx
 msgid "{count, plural, one {# row} other {# rows}}"
 msgstr "{count, plural, one {# rij} other {# rijen}}"
@@ -1342,7 +1346,6 @@ msgstr "Bezig met wissen…"
 #: src/pages/KnowledgeSection.tsx
 #: src/pages/MessagingSettingsPanel.tsx
 #: src/pages/ModelSettingsOverlay.tsx
-#: src/pages/PeerMessagesOverlay.tsx
 #: src/pages/RoutineEditor.tsx
 #: src/pages/shell/avatar-studio-popover.tsx
 #: src/pages/WindowChrome.tsx
@@ -1352,6 +1355,10 @@ msgstr "Sluiten"
 #: src/pages/shell/message-cards.tsx
 msgid "Close chart"
 msgstr "Grafiek sluiten"
+
+#: src/pages/PeerMessagesOverlay.tsx
+msgid "Close Chat"
+msgstr "Chat sluiten"
 
 #: src/pages/shell/computer-overlay.tsx
 msgid "Close computer"
@@ -1427,10 +1434,6 @@ msgstr "Code"
 #: src/pages/shell/sidebar-roster.tsx
 msgid "Collapse {0}"
 msgstr "{0} inklappen"
-
-#: src/pages/shell/message-view.tsx
-msgid "Collapse {label}"
-msgstr "{label} inklappen"
 
 #: src/pages/shell/avatar-studio-popover.tsx
 msgid "Color"
@@ -2819,10 +2822,6 @@ msgstr "Uitklappen"
 #: src/pages/shell/sidebar-roster.tsx
 msgid "Expand {0}"
 msgstr "{0} uitklappen"
-
-#: src/pages/shell/message-view.tsx
-msgid "Expand {label}"
-msgstr "{label} uitklappen"
 
 #: src/components/markdown-copy.tsx
 msgid "Expand table"
@@ -5790,10 +5789,6 @@ msgstr "Dit kan niet ongedaan worden gemaakt."
 #: src/pages/shell/dialogs.tsx
 msgid "This cannot be undone."
 msgstr "Dit kan niet ongedaan worden gemaakt."
-
-#: src/pages/PeerMessagesOverlay.tsx
-msgid "This chat is view-only"
-msgstr "Deze chat is alleen-lezen"
 
 #: src/pages/HostComputerPrompt.tsx
 msgid "this computer"

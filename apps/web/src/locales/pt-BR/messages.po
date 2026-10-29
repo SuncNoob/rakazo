@@ -171,6 +171,10 @@ msgstr "{commandVariable} é reservada e não pode ser usada como variável de c
 msgid "{connectedCount, plural, one {# connected} other {# connected}}"
 msgstr ""
 
+#: src/pages/shell/message-view.tsx
+msgid "{count, plural, one {# message with {peer}} other {# messages with {peer}}}"
+msgstr "{count, plural, one {# mensagem com {peer}} other {# mensagens com {peer}}}"
+
 #: src/components/markdown-copy.tsx
 msgid "{count, plural, one {# row} other {# rows}}"
 msgstr "{count, plural, one {# linha} other {# linhas}}"
@@ -1342,7 +1346,6 @@ msgstr "Limpeza"
 #: src/pages/KnowledgeSection.tsx
 #: src/pages/MessagingSettingsPanel.tsx
 #: src/pages/ModelSettingsOverlay.tsx
-#: src/pages/PeerMessagesOverlay.tsx
 #: src/pages/RoutineEditor.tsx
 #: src/pages/shell/avatar-studio-popover.tsx
 #: src/pages/WindowChrome.tsx
@@ -1352,6 +1355,10 @@ msgstr "Fechar"
 #: src/pages/shell/message-cards.tsx
 msgid "Close chart"
 msgstr "Fechar gráfico"
+
+#: src/pages/PeerMessagesOverlay.tsx
+msgid "Close Chat"
+msgstr "Fechar chat"
 
 #: src/pages/shell/computer-overlay.tsx
 msgid "Close computer"
@@ -1427,10 +1434,6 @@ msgstr "Código"
 #: src/pages/shell/sidebar-roster.tsx
 msgid "Collapse {0}"
 msgstr ""
-
-#: src/pages/shell/message-view.tsx
-msgid "Collapse {label}"
-msgstr "Recolher {label}"
 
 #: src/pages/shell/avatar-studio-popover.tsx
 msgid "Color"
@@ -2819,10 +2822,6 @@ msgstr "Expandir"
 #: src/pages/shell/sidebar-roster.tsx
 msgid "Expand {0}"
 msgstr ""
-
-#: src/pages/shell/message-view.tsx
-msgid "Expand {label}"
-msgstr "Expandir {label}"
 
 #: src/components/markdown-copy.tsx
 msgid "Expand table"
@@ -5790,10 +5789,6 @@ msgstr "Não é possível desfazer."
 #: src/pages/shell/dialogs.tsx
 msgid "This cannot be undone."
 msgstr "Essa ação não pode ser desfeita."
-
-#: src/pages/PeerMessagesOverlay.tsx
-msgid "This chat is view-only"
-msgstr "Este chat é somente leitura"
 
 #: src/pages/HostComputerPrompt.tsx
 msgid "this computer"

@@ -1,4 +1,5 @@
 export const JA_MESSAGES: Record<string, string> = {
+  "Close Chat": "チャットを閉じる",
   "How other bots see it": "他のボットからの見え方",
   "Share to": "共有先",
   "{count} files": "{count}個のファイル",
@@ -533,7 +534,6 @@ export const JA_MESSAGES: Record<string, string> = {
   "Add {name}": "{name}を追加",
   Added: "追加済み",
   Back: "戻る",
-  "Bearer authentication": "Bearer認証",
   "Bearer token": "Bearerトークン",
   "Connect Executor": "Executorに接続",
   "Connect Treg": "Tregに接続",
@@ -552,7 +552,6 @@ export const JA_MESSAGES: Record<string, string> = {
   "GraphQL endpoint": "GraphQLエンドポイント",
   "Loading tools…": "ツールを読み込み中…",
   "No apps match your search.": "検索に一致するアプリはありません。",
-  "No authentication": "認証なし",
   "No tools available.": "利用できるツールはありません。",
   "Not in the plugin catalog": "プラグインカタログにありません",
   "OpenAPI JSON": "OpenAPI JSON",
@@ -925,6 +924,7 @@ export const JA_MESSAGES: Record<string, string> = {
   "OAuth expired": "OAuthの有効期限切れ",
   "Needs an OAuth client ID": "OAuth クライアント ID が必要です",
   "Credential saved": "認証情報を保存済み",
+  Authentication: "認証方式",
   "No auth": "認証なし",
   "The bot couldn't reply because its provider's daily limit was reached.":
     "プロバイダーの1日の上限に達したため、ボットは返信できませんでした。",
@@ -1137,6 +1137,13 @@ export const JA_MESSAGES: Record<string, string> = {
   "{from} to {to}": "{from}〜{to}",
   "Every {day}": "毎週{day}",
   "Every {days} and {last}": "毎週{days}と{last}",
+
+  // Native remote MCP authentication controls.
+  "API key header name": "APIキーヘッダー名",
+  Bearer: "Bearer",
+  "Connect OAuth": "OAuthで接続",
+  "Could not start MCP OAuth": "MCPのOAuth認証を開始できませんでした",
+  OAuth: "OAuth",
   "Always open {site}": "{site} を常に開く",
   "Trusted sites": "信頼済みサイト",
   "Run history": "実行履歴",
@@ -1241,3 +1248,5 @@ export const JA_MESSAGES: Record<string, string> = {
   "{count} free months earned": "{count}か月分の無料期間を獲得",
   "Submit a plugin": "プラグインを申請",
 };
+
+export const PEER_MESSAGE_FORMS = { other: "{peer}とのメッセージ{count}件" };

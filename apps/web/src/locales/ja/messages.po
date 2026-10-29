@@ -171,6 +171,10 @@ msgstr "{commandVariable}は予約済みのため、コマンド変数として�
 msgid "{connectedCount, plural, one {# connected} other {# connected}}"
 msgstr ""
 
+#: src/pages/shell/message-view.tsx
+msgid "{count, plural, one {# message with {peer}} other {# messages with {peer}}}"
+msgstr "{count, plural, other {{peer}とのメッセージ#件}}"
+
 #: src/components/markdown-copy.tsx
 msgid "{count, plural, one {# row} other {# rows}}"
 msgstr "{count, plural, one {# 行} other {# 行}}"
@@ -1342,7 +1346,6 @@ msgstr "クリア中…"
 #: src/pages/KnowledgeSection.tsx
 #: src/pages/MessagingSettingsPanel.tsx
 #: src/pages/ModelSettingsOverlay.tsx
-#: src/pages/PeerMessagesOverlay.tsx
 #: src/pages/RoutineEditor.tsx
 #: src/pages/shell/avatar-studio-popover.tsx
 #: src/pages/WindowChrome.tsx
@@ -1352,6 +1355,10 @@ msgstr "閉じる"
 #: src/pages/shell/message-cards.tsx
 msgid "Close chart"
 msgstr "チャートを閉じる"
+
+#: src/pages/PeerMessagesOverlay.tsx
+msgid "Close Chat"
+msgstr "チャットを閉じる"
 
 #: src/pages/shell/computer-overlay.tsx
 msgid "Close computer"
@@ -1427,10 +1434,6 @@ msgstr "コード"
 #: src/pages/shell/sidebar-roster.tsx
 msgid "Collapse {0}"
 msgstr "{0}を折りたたむ"
-
-#: src/pages/shell/message-view.tsx
-msgid "Collapse {label}"
-msgstr "{label}を折りたたむ"
 
 #: src/pages/shell/avatar-studio-popover.tsx
 msgid "Color"
@@ -2819,10 +2822,6 @@ msgstr "展開"
 #: src/pages/shell/sidebar-roster.tsx
 msgid "Expand {0}"
 msgstr "{0}を展開"
-
-#: src/pages/shell/message-view.tsx
-msgid "Expand {label}"
-msgstr "{label}を展開"
 
 #: src/components/markdown-copy.tsx
 msgid "Expand table"
@@ -5790,10 +5789,6 @@ msgstr "この操作は元に戻せません。"
 #: src/pages/shell/dialogs.tsx
 msgid "This cannot be undone."
 msgstr "この操作は元に戻せません。"
-
-#: src/pages/PeerMessagesOverlay.tsx
-msgid "This chat is view-only"
-msgstr "このチャットは閲覧のみです"
 
 #: src/pages/HostComputerPrompt.tsx
 msgid "this computer"

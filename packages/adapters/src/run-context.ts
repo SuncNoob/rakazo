@@ -188,6 +188,8 @@ export interface RunSource {
   messagingChannelRun: boolean;
   channelId: string | undefined;
   historySearchBeforeSeq: number;
+  /** See historyMyChatsAllowed; claimed outside steering still revokes it per call. */
+  myChatsAllowed: boolean;
   voiceCall: boolean;
   callEndRun: boolean;
   callClientNonce: string | null;

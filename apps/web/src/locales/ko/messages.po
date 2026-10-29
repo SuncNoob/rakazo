@@ -171,6 +171,10 @@ msgstr "{commandVariable}은(는) 예약되어 있어 명령 변수로 사용할
 msgid "{connectedCount, plural, one {# connected} other {# connected}}"
 msgstr ""
 
+#: src/pages/shell/message-view.tsx
+msgid "{count, plural, one {# message with {peer}} other {# messages with {peer}}}"
+msgstr "{count, plural, other {{peer}님과 메시지 #개}}"
+
 #: src/components/markdown-copy.tsx
 msgid "{count, plural, one {# row} other {# rows}}"
 msgstr "{count, plural, one {# 행} other {# 행}}"
@@ -1342,7 +1346,6 @@ msgstr "비우는 중…"
 #: src/pages/KnowledgeSection.tsx
 #: src/pages/MessagingSettingsPanel.tsx
 #: src/pages/ModelSettingsOverlay.tsx
-#: src/pages/PeerMessagesOverlay.tsx
 #: src/pages/RoutineEditor.tsx
 #: src/pages/shell/avatar-studio-popover.tsx
 #: src/pages/WindowChrome.tsx
@@ -1352,6 +1355,10 @@ msgstr "닫기"
 #: src/pages/shell/message-cards.tsx
 msgid "Close chart"
 msgstr "차트 닫기"
+
+#: src/pages/PeerMessagesOverlay.tsx
+msgid "Close Chat"
+msgstr "채팅 닫기"
 
 #: src/pages/shell/computer-overlay.tsx
 msgid "Close computer"
@@ -1427,10 +1434,6 @@ msgstr "인증 코드"
 #: src/pages/shell/sidebar-roster.tsx
 msgid "Collapse {0}"
 msgstr "{0} 접기"
-
-#: src/pages/shell/message-view.tsx
-msgid "Collapse {label}"
-msgstr "{label} 접기"
 
 #: src/pages/shell/avatar-studio-popover.tsx
 msgid "Color"
@@ -2819,10 +2822,6 @@ msgstr "펼치기"
 #: src/pages/shell/sidebar-roster.tsx
 msgid "Expand {0}"
 msgstr "{0} 펼치기"
-
-#: src/pages/shell/message-view.tsx
-msgid "Expand {label}"
-msgstr "{label} 펼치기"
 
 #: src/components/markdown-copy.tsx
 msgid "Expand table"
@@ -5790,10 +5789,6 @@ msgstr "되돌릴 수 없습니다."
 #: src/pages/shell/dialogs.tsx
 msgid "This cannot be undone."
 msgstr "이 작업은 되돌릴 수 없습니다."
-
-#: src/pages/PeerMessagesOverlay.tsx
-msgid "This chat is view-only"
-msgstr "이 채팅은 읽기 전용입니다"
 
 #: src/pages/HostComputerPrompt.tsx
 msgid "this computer"

@@ -834,11 +834,13 @@ export function mcpRoutes(ctx: RouterContext) {
         begin: authed.mcp.oauth.begin.handler(async ({ context, input }) => {
           try {
             const expectedRedirect = new URL("/mcp/oauth/callback", deps.env.webOrigin).toString();
-            if (new URL(input.redirectUri).toString() !== expectedRedirect) {
+            // Native clients omit the redirect; the registered web callback is always used.
+            if (input.redirectUri && new URL(input.redirectUri).toString() !== expectedRedirect) {
               throw new Error("MCP OAuth redirect URI is not allowed");
             }
             return await mcpOAuth.begin({
               ...input,
+              redirectUri: expectedRedirect,
               spaceId: context.actor.spaceId,
               userId: context.actor.userId,
             });

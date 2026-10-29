@@ -564,6 +564,7 @@ describe("model setup gate", () => {
   function modelGateDeps(options: {
     agentRuntime: string;
     maxUploadSizeBytes?: number;
+    maxAttachmentsPerMessage?: number;
     deploymentModelConfigured?: boolean;
     deploymentModelHostCredentials?: boolean;
     deploymentModelCredentialCipher?: string;
@@ -592,6 +593,7 @@ describe("model setup gate", () => {
       env: {
         agentRuntime: options.agentRuntime,
         maxUploadSizeBytes: options.maxUploadSizeBytes,
+        maxAttachmentsPerMessage: options.maxAttachmentsPerMessage,
         defaultProvider: "openrouter",
         defaultModel: "test-model",
         deploymentModelConfigured: options.deploymentModelConfigured,
@@ -622,6 +624,21 @@ describe("model setup gate", () => {
     );
     return response;
   }
+
+  it.each([undefined, 1, 8, 100])(
+    "advertises the effective attachment count (%s)",
+    async (maxAttachmentsPerMessage) => {
+      const { actor, handler } = modelGateDeps({
+        agentRuntime: "scripted",
+        maxAttachmentsPerMessage,
+      });
+      const response = await call(handler, actor, "me", null);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        json: { maxAttachmentsPerMessage: maxAttachmentsPerMessage ?? 4 },
+      });
+    },
+  );
 
   it.each([undefined, 25 * 1024 * 1024])(
     "advertises the effective upload limit in me (%s)",
@@ -2377,6 +2394,33 @@ describe("MCP server health", () => {
       ]);
       const [listed] = await client.mcp.servers.list();
       expect(listed?.health).toMatchObject({ status: "error", code: MCP_OAUTH_CLIENT_REQUIRED });
+    });
+
+    it("uses the registered web callback when a native client omits the redirect", async () => {
+      const h = harness({
+        row: baseRow({ transport: "streamable_http", endpoint: "https://mcp.example.test/mcp" }),
+      });
+      const begin = vi.fn(async () => ({ status: "already_connected" as const }));
+      Object.assign(h.deps, { mcpOAuth: { ...(h.deps.mcpOAuth as object), begin } });
+      const client = createRouterClient(createRouter(h.deps), {
+        context: {
+          actor: {
+            spaceId: "workspace-1",
+            userId: "owner-1",
+            email: "owner@rakazo.test",
+            isDeploymentOwner: true,
+          },
+        } as never,
+      });
+
+      await expect(client.mcp.oauth.begin({ serverId: "server-1" })).resolves.toEqual({
+        status: "already_connected",
+      });
+      expect(begin).toHaveBeenCalledWith(
+        expect.objectContaining({
+          redirectUri: new URL("/mcp/oauth/callback", h.deps.env.webOrigin).toString(),
+        }),
+      );
     });
 
     it("probes the server once its OAuth session completes", async () => {

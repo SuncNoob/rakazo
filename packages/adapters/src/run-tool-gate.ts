@@ -20,6 +20,7 @@ import {
   outboundSiteGate,
   planActionGate,
   redactSecrets,
+  repeatsDeniedAction,
   resolveActionApprovalForTools,
   toolRequiresApproval,
   toolRequiresExplicitApproval,
@@ -32,8 +33,10 @@ import { getLogger } from "@rakazo/logging";
 import type { FleetCardSummary } from "./approval-ask.js";
 import { buildApprovalAskBlock, MAX_FETCH_URL_LENGTH, SITE_SENDING_TOOLS } from "./approval-ask.js";
 import {
+  boundDirectApprovalDetails,
   claimApprovedEffect,
   claimIntendedEffect,
+  DENIED_ACTION_ERROR,
   resolveDuplicateEffectGate,
   settleUncertainEffect,
   uncertainEffectResult,
@@ -57,7 +60,12 @@ import {
   pauseForSecret,
   persistTurnCheckpoint,
 } from "./run-context.js";
-import { completeEffect, recordEffect, uncertainEffectError } from "./run-effects.js";
+import {
+  CATALOG_APPROVAL_TOOL,
+  completeEffect,
+  recordEffect,
+  uncertainEffectError,
+} from "./run-effects.js";
 import { renewRunLease } from "./run-lifecycle.js";
 import { notifyRun } from "./run-notifications.js";
 import { resolveCompletedSecretLeftover } from "./run-secret.js";
@@ -347,6 +355,40 @@ export async function gateToolCall(
           ctx.state.effects.consumedIds,
           batch && (batch.complete ? batch.actions : []),
         );
+
+  // Refuse a repeat of a tool the user denied earlier in this run. Refusals carry a result,
+  // so only real denies match. A stored row is checked only while it still waits for an
+  // answer. web_fetch and secret_request target one site per call; request_secret and
+  // connect_app name their own target.
+  const repeatChecked =
+    applied &&
+    (!applied.duplicate || applied.effect.status === "intended") &&
+    !["web_fetch", "secret_request", "request_secret", "connect_app"].includes(name);
+  const deniedEarlier = repeatChecked
+    ? (
+        await deps.prisma.externalEffect.findMany({
+          where: { runId, status: "denied", kind: replayEffectToolName },
+          select: { request: true, result: true },
+        })
+      ).flatMap((effect) =>
+        effect.result == null
+          ? [
+              boundDirectApprovalDetails(effect.request, CATALOG_APPROVAL_TOOL)?.args ??
+                effect.request,
+            ]
+          : [],
+      )
+    : [];
+  if (
+    applied &&
+    repeatsDeniedAction({ toolName: replayEffectToolName, args, denied: deniedEarlier })
+  ) {
+    await deps.prisma.externalEffect.updateMany({
+      where: { id: applied.effect.id, status: "intended" },
+      data: { status: "denied", result: { refused: "repeat" } },
+    });
+    return { result: { error: DENIED_ACTION_ERROR } };
+  }
 
   const runAutoReview = async () => {
     const judged = await reviewToolCall(ctx, {

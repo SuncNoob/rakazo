@@ -46,6 +46,35 @@ describe("sandbox idle", () => {
     installLogger(createLogger({ service: "test", level: "off", sinks: [] }));
   });
 
+  it.each(["bytes", "files"] as const)(
+    "announces an unsaved home once for %s until the next save",
+    async (limit) => {
+      const harness = idleHarness({ exportError: new WorkspaceTooLargeError(limit) });
+      await sleepComputerIfIdle(harness.deps, harness.computer.id);
+      await sleepComputerIfIdle(harness.deps, harness.computer.id);
+      expect(harness.prisma.message.create).toHaveBeenCalledOnce();
+      expect(harness.prisma.message.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            role: "system",
+            blocks: [
+              {
+                kind: "meta",
+                text: `${new WorkspaceTooLargeError(limit).message}. It will keep running unsaved. Remove large files or files you no longer need so it can be saved.`,
+              },
+            ],
+          }),
+        }),
+      );
+      expect(harness.events.notify).toHaveBeenCalledOnce();
+      expect(harness.sandbox.stop).not.toHaveBeenCalled();
+      expect(harness.computer.state).toBe("running");
+      harness.computer.homeRevisionAt = new Date();
+      await sleepComputerIfIdle(harness.deps, harness.computer.id);
+      expect(harness.prisma.message.create).toHaveBeenCalledTimes(2);
+    },
+  );
+
   it("defaults to ten minutes when SANDBOX_IDLE_MS is unset", () => {
     expect(computerIdleSleepEnabled()).toBe(true);
     expect(sandboxIdleMs()).toBe(DEFAULT_SANDBOX_IDLE_MS);
@@ -125,18 +154,41 @@ describe("sandbox idle", () => {
     }
   });
 
-  it("keeps a computer alive without suspending it while a run is active", async () => {
-    const harness = idleHarness();
-    harness.prisma.run.findFirst.mockResolvedValueOnce({ id: "run" });
+  it.each(["queued", "leased", "running"])(
+    "keeps a computer awake while a run is %s",
+    async (status) => {
+      const harness = idleHarness();
+      harness.prisma.run.findFirst.mockImplementation(async ({ where }) =>
+        where.status.in.includes(status) ? { id: "run" } : null,
+      );
 
-    await sleepComputerIfIdle(harness.deps, harness.computer.id);
+      await sleepComputerIfIdle(harness.deps, harness.computer.id);
 
-    expect(harness.home.commit).not.toHaveBeenCalled();
-    expect(harness.sandbox.stop).not.toHaveBeenCalled();
-    expect(harness.sandbox.execute).not.toHaveBeenCalled();
-    expect(harness.sandbox.keepAlive).toHaveBeenCalledOnce();
-    expect(harness.jobs.enqueue).toHaveBeenCalledOnce();
-  });
+      expect(harness.home.commit).not.toHaveBeenCalled();
+      expect(harness.sandbox.stop).not.toHaveBeenCalled();
+      expect(harness.sandbox.execute).not.toHaveBeenCalled();
+      expect(harness.sandbox.keepAlive).toHaveBeenCalledOnce();
+      expect(harness.jobs.enqueue).toHaveBeenCalledOnce();
+    },
+  );
+
+  it.each([undefined, false, true])(
+    "suspends a computer whose only active run is waiting_input (billsWhileRunning: %s)",
+    async (billsWhileRunning) => {
+      const harness = idleHarness({ billsWhileRunning });
+      harness.prisma.run.findFirst.mockImplementation(async ({ where }) =>
+        where.status.in.includes("waiting_input") ? { id: "waiting-for-answer" } : null,
+      );
+
+      await sleepComputerIfIdle(harness.deps, harness.computer.id);
+
+      expect(harness.home.commit).toHaveBeenCalledOnce();
+      expect(harness.sandbox.stop).toHaveBeenCalledOnce();
+      expect(harness.computer.state).toBe("suspended");
+      expect(harness.sandbox.keepAlive).not.toHaveBeenCalled();
+      expect(harness.jobs.enqueue).not.toHaveBeenCalled();
+    },
+  );
 
   it("leaves a held computer whose heartbeat finds the sandbox gone to its recovery", async () => {
     const harness = idleHarness();
@@ -1488,8 +1540,26 @@ function idleHarness(
     homeRevisionAt: options.homeRevisionAt ?? null,
     updatedAt: new Date("2026-01-01T00:00:00.000Z"),
   };
+  const notices = new Map<string, { id: string }>();
   const prisma = {
+    $transaction: async <T>(work: (tx: unknown) => Promise<T>): Promise<T> => work(prisma),
+    thread: { update: vi.fn().mockResolvedValue({ nextMessageSeq: 1, nextEventSeq: 1 }) },
+    message: {
+      findUnique: vi.fn(
+        async ({ where }) => notices.get(where.threadId_clientNonce.clientNonce) ?? null,
+      ),
+      create: vi.fn(async ({ data }) => {
+        const message = { id: "notice" };
+        notices.set(data.clientNonce, message);
+        return message;
+      }),
+    },
     computer: {
+      findFirst: vi.fn(async () => ({
+        state: "running",
+        restorePending: false,
+        screenGeneration: 0,
+      })),
       findUnique: vi.fn(async () => ({ ...computer })),
       updateMany: vi.fn(async (args) => {
         if (args.where.updatedAt && args.where.updatedAt.getTime() !== computer.updatedAt.getTime())
@@ -1508,6 +1578,7 @@ function idleHarness(
         .mockResolvedValue(options.takeoverRequestedAt ? [{ id: "waiting-for-user" }] : []),
     },
     event: {
+      create: vi.fn().mockResolvedValue({ seq: 1 }),
       findFirst: vi.fn(async ({ where }) => {
         if (where.type === "computer.takeover.granted") {
           return options.takeoverSinceSave ? { id: "later-takeover" } : null;
@@ -1556,7 +1627,10 @@ function idleHarness(
     cancel: vi.fn().mockResolvedValue(undefined),
     close: vi.fn().mockResolvedValue(undefined),
   };
-  const events = { append: vi.fn().mockResolvedValue({}) };
+  const events = {
+    append: vi.fn().mockResolvedValue({}),
+    notify: vi.fn().mockResolvedValue(undefined),
+  };
   return {
     computer,
     prisma,

@@ -7,14 +7,22 @@ import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 import PeerChat from "../app/peer-chat";
 
-const { rpc, scrollToEnd, scrollProps } = vi.hoisted(() => ({
+const { rpc, back, scrollToEnd, scrollProps } = vi.hoisted(() => ({
   rpc: vi.fn(),
+  back: vi.fn(),
   scrollToEnd: vi.fn(),
   scrollProps: {
     current: {} as { onContentSizeChange?: () => void; onScrollBeginDrag?: () => void },
   },
 }));
 
+vi.mock("../components/native-action-button", () => ({
+  NativeActionButton: ({ label, onPress }: { label: string; onPress: () => void }) =>
+    createElement("button", { type: "button", onClick: onPress }, label),
+}));
+vi.mock("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ bottom: 0 }) }));
+vi.mock("../components/inline-image-attachment", () => ({ InlineImageAttachment: () => null }));
+vi.mock("./artifact-open", () => ({ openMobileArtifact: vi.fn() }));
 vi.mock("./api", () => ({ rpc }));
 vi.mock("./side-insets", () => ({ useSideInsets: () => ({}) }));
 vi.mock("./appearance", () => ({ mobileTokens: () => ({}) }));
@@ -29,7 +37,10 @@ vi.mock("@rakazo/chat-ui/native", () => ({
   ChatMarkdown: ({ children }: { children: ReactNode }) => createElement("p", null, children),
 }));
 vi.mock("expo-router", () => ({
-  Stack: { Screen: () => null },
+  Stack: {
+    Screen: ({ options }: { options: { headerTitle: () => ReactNode } }) => options.headerTitle(),
+  },
+  useRouter: () => ({ back }),
   useLocalSearchParams: () => ({ botId: "chief", botName: "Chief", peerBotId: "peer" }),
 }));
 vi.mock("react-native", () => {
@@ -63,6 +74,7 @@ afterEach(() => {
   act(() => root?.unmount());
   document.body.innerHTML = "";
   rpc.mockReset();
+  back.mockReset();
   scrollToEnd.mockReset();
 });
 
@@ -109,4 +121,13 @@ it("leaves the position alone once the reader scrolls", async () => {
   });
 
   expect(scrollToEnd).not.toHaveBeenCalled();
+});
+
+it("names both bots in the header and closes the read-only chat", async () => {
+  const screen = await open();
+  expect(screen.textContent).toContain("Chief⇄Researcher");
+  const close = screen.querySelector<HTMLButtonElement>("button");
+  expect(close?.textContent).toBe("Close Chat");
+  act(() => close?.click());
+  expect(back).toHaveBeenCalledOnce();
 });

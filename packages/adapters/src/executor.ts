@@ -137,6 +137,7 @@ import {
   createRunWorkspaceCheckpoint,
   failRunBeforeTurn,
   mayOpenModelStream,
+  providerOutageRetryDelay,
   RUN_SETUP_FAILURE_LIMIT,
   renewRunLease,
   requeueComputerRun,
@@ -168,6 +169,7 @@ import {
   selectBuiltinToolsForRun,
 } from "./run-tool-selection.js";
 import { applyTool } from "./run-tools.js";
+import { historyMyChatsAllowed } from "./run-tools-memory.js";
 import type { UserComputerState } from "./run-tools-user-computer.js";
 import { USER_COMPUTER_SHELL_TOOL, userComputerOwner } from "./run-tools-user-computer.js";
 import { createRunTrustLoaders } from "./run-trust.js";
@@ -232,8 +234,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         ...(run.userId ? { "user.id": run.userId } : {}),
       });
       if (isTerminal(run.status as RunStatus)) return;
-      let { resumeCheckpoint, heldForTakeover, resumeHeldLease, takeoverResume } =
-        takeoverContinuePlan(run);
+      let { resumeCheckpoint, heldForTakeover, takeoverResume } = takeoverContinuePlan(run);
 
       const fence = nextFence(run.leaseFence);
       const now = new Date();
@@ -315,7 +316,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
           computerId: leaseTarget.computerId,
           runId,
           botId: run.botId,
-          resumeHeldLease,
+          workerId,
+          runFence: fence,
         });
         if (!computerLease && leaseTarget.computer?.scope === "dedicated") {
           computerLease = await acquireDedicatedScreenLeaseFence(deps.prisma, {
@@ -1019,18 +1021,17 @@ export function createRunExecutor(deps: ExecutorDeps) {
             select: { status: true, checkpoint: true },
           });
           if (held) {
-            ({ resumeCheckpoint, heldForTakeover, resumeHeldLease, takeoverResume } =
-              refreshTakeoverContinuePlan(
-                { resumeCheckpoint, heldForTakeover, resumeHeldLease, takeoverResume },
-                held,
-              ));
+            ({ resumeCheckpoint, heldForTakeover, takeoverResume } = refreshTakeoverContinuePlan(
+              { resumeCheckpoint, heldForTakeover, takeoverResume },
+              held,
+            ));
           }
         }
         const sourceMessage =
           (run.trigger === "user" || run.trigger === "follow_up") && run.sourceMessageId
             ? await deps.prisma.message.findUnique({
                 where: { id: run.sourceMessageId },
-                select: { clientNonce: true, role: true, blocks: true },
+                select: { clientNonce: true, role: true, blocks: true, threadId: true },
               })
             : null;
         // Calls carry no schema flag: the sending client encodes them in the clientNonce.
@@ -1239,6 +1240,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
             messagingChannelRun,
             channelId,
             historySearchBeforeSeq,
+            myChatsAllowed: historyMyChatsAllowed(
+              run,
+              sourceMessage,
+              messagingChannelRun ||
+                Boolean(
+                  channelId ||
+                    thread.externalConversationId ||
+                    messagingChannelId(sourceMessage?.blocks as MessageBlock[] | undefined),
+                ),
+            ),
             voiceCall,
             callEndRun,
             callClientNonce: callClientNonceForRun,
@@ -1695,20 +1706,19 @@ export function createRunExecutor(deps: ExecutorDeps) {
         );
         // An outage at the computer provider is retried like any setup failure, but is not a
         // Rakazo bug to report.
-        if (
+        const providerOutage =
           setupError instanceof SandboxUnavailableError ||
-          setupError instanceof SandboxUnresponsiveError
-        ) {
+          setupError instanceof SandboxUnresponsiveError;
+        // A lost lease aborted setup on purpose; whatever that interrupted is not a failure.
+        if (providerOutage || !lease.valid) {
           getLogger().warn("run setup failed", { error: reportedSetupError });
         } else if (!computerBusy) {
           getLogger().error("run setup failed", reportedSetupError);
         }
+        const priorFailures = retryForever ? 0 : await setupFailureStreak(deps.prisma, runId);
         // The job reconciler re-enqueues a queued run whose job ran out of attempts, so a
         // setup that fails every time would retry forever. End the run instead.
-        if (
-          !retryForever &&
-          (await setupFailureStreak(deps.prisma, runId)) >= RUN_SETUP_FAILURE_LIMIT - 1
-        ) {
+        if (!retryForever && priorFailures >= RUN_SETUP_FAILURE_LIMIT - 1) {
           const bot = await deps.prisma.bot.findUnique({
             where: { id: run.botId },
             select: { name: true },
@@ -1722,6 +1732,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
           );
           return;
         }
+        const retryDelay = providerOutage
+          ? providerOutageRetryDelay(priorFailures)
+          : computerRetryDelay(fence);
         const released = await writeComputerRunRequeue(
           deps,
           runId,
@@ -1730,6 +1743,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           resumeCheckpoint,
           heldForTakeover,
           retryForever ? null : "Run setup failed; retrying",
+          new Date(Date.now() + retryDelay),
         );
         if (released) {
           await deps.prisma.attempt.update({
@@ -1743,7 +1757,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (retryForever || dispatchHandedOff) {
             await deps.jobs.enqueue({
               ...runContinueJob(runId),
-              availableAt: new Date(Date.now() + computerRetryDelay(fence)),
+              availableAt: new Date(Date.now() + retryDelay),
             });
             return;
           }

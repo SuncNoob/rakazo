@@ -16,7 +16,7 @@ import { AnalyticsScreenInput } from "./analytics.js";
 import {
   ARTIFACT_DESCRIPTION_MAX_LENGTH,
   ARTIFACT_NAME_MAX_LENGTH,
-  ATTACHMENT_MAX_COUNT,
+  ATTACHMENT_COUNT_CEILING,
 } from "./attachments.js";
 import {
   BoardEventSchema,
@@ -194,7 +194,7 @@ const threadSendInput = threadTarget
   .safeExtend({
     imageHandling: z.enum(["confirm", "file"]).optional(),
     text: z.string().optional(),
-    artifactIds: z.array(Id).max(ATTACHMENT_MAX_COUNT).optional(),
+    artifactIds: z.array(Id).max(ATTACHMENT_COUNT_CEILING).optional(),
     /** Bare bot ids (legacy) or typed mention chips from the composer. */
     mentions: z
       .array(z.union([Id, structuredMentionTarget]))
@@ -984,7 +984,7 @@ export const appContract = {
         .output(z.array(BotMcpServerSchema)),
     },
     oauth: {
-      begin: oc.input(z.object({ serverId: Id, redirectUri: z.string().url() })).output(
+      begin: oc.input(z.object({ serverId: Id, redirectUri: z.string().url().optional() })).output(
         z.discriminatedUnion("status", [
           z.object({
             status: z.literal("authorization_required"),

@@ -171,6 +171,10 @@ msgstr "{commandVariable} आरक्षित है और कमांड �
 msgid "{connectedCount, plural, one {# connected} other {# connected}}"
 msgstr ""
 
+#: src/pages/shell/message-view.tsx
+msgid "{count, plural, one {# message with {peer}} other {# messages with {peer}}}"
+msgstr "{count, plural, one {{peer} के साथ # संदेश} other {{peer} के साथ # संदेश}}"
+
 #: src/components/markdown-copy.tsx
 msgid "{count, plural, one {# row} other {# rows}}"
 msgstr "{count, plural, one {# पंक्ति} other {# पंक्तियाँ}}"
@@ -1342,7 +1346,6 @@ msgstr "साफ़ किया जा रहा है…"
 #: src/pages/KnowledgeSection.tsx
 #: src/pages/MessagingSettingsPanel.tsx
 #: src/pages/ModelSettingsOverlay.tsx
-#: src/pages/PeerMessagesOverlay.tsx
 #: src/pages/RoutineEditor.tsx
 #: src/pages/shell/avatar-studio-popover.tsx
 #: src/pages/WindowChrome.tsx
@@ -1352,6 +1355,10 @@ msgstr "बंद करें"
 #: src/pages/shell/message-cards.tsx
 msgid "Close chart"
 msgstr "चार्ट बंद करें"
+
+#: src/pages/PeerMessagesOverlay.tsx
+msgid "Close Chat"
+msgstr "चैट बंद करें"
 
 #: src/pages/shell/computer-overlay.tsx
 msgid "Close computer"
@@ -1427,10 +1434,6 @@ msgstr "कोड"
 #: src/pages/shell/sidebar-roster.tsx
 msgid "Collapse {0}"
 msgstr ""
-
-#: src/pages/shell/message-view.tsx
-msgid "Collapse {label}"
-msgstr "{label} संक्षिप्त करें"
 
 #: src/pages/shell/avatar-studio-popover.tsx
 msgid "Color"
@@ -2819,10 +2822,6 @@ msgstr "विस्तृत करें"
 #: src/pages/shell/sidebar-roster.tsx
 msgid "Expand {0}"
 msgstr ""
-
-#: src/pages/shell/message-view.tsx
-msgid "Expand {label}"
-msgstr "{label} विस्तृत करें"
 
 #: src/components/markdown-copy.tsx
 msgid "Expand table"
@@ -5790,10 +5789,6 @@ msgstr "इसे पूर्ववत नहीं किया जा सक�
 #: src/pages/shell/dialogs.tsx
 msgid "This cannot be undone."
 msgstr "इसे पूर्ववत नहीं किया जा सकता।"
-
-#: src/pages/PeerMessagesOverlay.tsx
-msgid "This chat is view-only"
-msgstr "यह चैट केवल देखने के लिए है"
 
 #: src/pages/HostComputerPrompt.tsx
 msgid "this computer"

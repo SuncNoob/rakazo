@@ -172,6 +172,10 @@ msgstr "{commandVariable} 是保留名稱，不能用作命令變數。請選擇
 msgid "{connectedCount, plural, one {# connected} other {# connected}}"
 msgstr ""
 
+#: src/pages/shell/message-view.tsx
+msgid "{count, plural, one {# message with {peer}} other {# messages with {peer}}}"
+msgstr "{count, plural, other {與{peer}的 # 則訊息}}"
+
 #: src/components/markdown-copy.tsx
 msgid "{count, plural, one {# row} other {# rows}}"
 msgstr "{count, plural, one {# 列} other {# 列}}"
@@ -1343,7 +1347,6 @@ msgstr "正在清空…"
 #: src/pages/KnowledgeSection.tsx
 #: src/pages/MessagingSettingsPanel.tsx
 #: src/pages/ModelSettingsOverlay.tsx
-#: src/pages/PeerMessagesOverlay.tsx
 #: src/pages/RoutineEditor.tsx
 #: src/pages/shell/avatar-studio-popover.tsx
 #: src/pages/WindowChrome.tsx
@@ -1353,6 +1356,10 @@ msgstr "關閉"
 #: src/pages/shell/message-cards.tsx
 msgid "Close chart"
 msgstr "關閉圖表"
+
+#: src/pages/PeerMessagesOverlay.tsx
+msgid "Close Chat"
+msgstr "關閉聊天"
 
 #: src/pages/shell/computer-overlay.tsx
 msgid "Close computer"
@@ -1428,10 +1435,6 @@ msgstr "驗證碼"
 #: src/pages/shell/sidebar-roster.tsx
 msgid "Collapse {0}"
 msgstr "摺疊 {0}"
-
-#: src/pages/shell/message-view.tsx
-msgid "Collapse {label}"
-msgstr "摺疊 {label}"
 
 #: src/pages/shell/avatar-studio-popover.tsx
 msgid "Color"
@@ -2820,10 +2823,6 @@ msgstr "展開"
 #: src/pages/shell/sidebar-roster.tsx
 msgid "Expand {0}"
 msgstr "展開 {0}"
-
-#: src/pages/shell/message-view.tsx
-msgid "Expand {label}"
-msgstr "展開 {label}"
 
 #: src/components/markdown-copy.tsx
 msgid "Expand table"
@@ -5791,10 +5790,6 @@ msgstr "此操作無法復原。"
 #: src/pages/shell/dialogs.tsx
 msgid "This cannot be undone."
 msgstr "此操作無法復原。"
-
-#: src/pages/PeerMessagesOverlay.tsx
-msgid "This chat is view-only"
-msgstr "此對話為唯讀"
 
 #: src/pages/HostComputerPrompt.tsx
 msgid "this computer"

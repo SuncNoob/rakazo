@@ -9,7 +9,7 @@ import type {
   SandboxStateEnum,
   SavedSnapshot,
 } from "@boatdev/sdk";
-import { BoatApi, Configuration, followCommand } from "@boatdev/sdk";
+import { BoatApi, Configuration, FetchError, followCommand } from "@boatdev/sdk";
 import type {
   AdapterContext,
   CommandRequest,
@@ -45,18 +45,17 @@ import {
   wrapBoatCall,
 } from "./boat-errors.js";
 import { normalizeWorkspacePath, shellQuote, workspacePath } from "./computer-support.js";
-import {
-  PORTABLE_TRANSFER_BATCH_BYTES,
-  SKIPPED_BROWSER_PROFILE_DIRECTORIES,
-  SKIPPED_BROWSER_PROFILE_FILES,
-  shouldSkipPortableWorkspaceFile,
-} from "./computer-workspace.js";
+import { PORTABLE_TRANSFER_BATCH_BYTES } from "./computer-workspace.js";
 import { LinuxDesktop, PREPARE_LINUX_DESKTOP, VERIFY_LINUX_DESKTOP } from "./linux-desktop.js";
 import { sandboxCommandArgv } from "./sandbox-command-environment.js";
 import { isSandboxGoneError } from "./sandbox-errors.js";
 import { shellExportScript } from "./sandbox-shell-environment.js";
 import { withAbort } from "./web-ssrf.js";
 import { readWorkspaceArchive } from "./workspace-archive.js";
+import {
+  shouldSkipPortableWorkspaceFile,
+  workspaceSaveFindExpression,
+} from "./workspace-save-policy.js";
 
 const BOAT_API_BASE = "https://boat.dev/api/v1";
 const BOAT_WORKSPACE = "/home/user/rakazo-home";
@@ -668,6 +667,7 @@ export class BoatSandboxProvider implements SandboxProvider {
       batchBytes = 0;
     };
     for await (const file of files) {
+      if (shouldSkipPortableWorkspaceFile(file.path)) continue;
       if (context.signal.aborted) throw context.signal.reason ?? new Error("import aborted");
       if (
         batch.length >= 8 ||
@@ -701,9 +701,15 @@ export class BoatSandboxProvider implements SandboxProvider {
   async isRunning(computer: ComputerRef, context: AdapterContext): Promise<boolean> {
     if (computer.kind !== "boat") return false;
     try {
+      // Its caller retries an unread status itself, so a rate limit's wait is cut short here.
       const { sandbox } = await this.client.get(
         { sandboxId: this.id(computer) },
-        { signal: context.signal },
+        {
+          signal: AbortSignal.any([
+            context.signal,
+            AbortSignal.timeout(BOAT_GONE_CHECK_TIMEOUT_MS),
+          ]),
+        },
       );
       return RUNNABLE_STATES.has(sandbox.state);
     } catch (error) {
@@ -1026,10 +1032,10 @@ export class BoatSandboxProvider implements SandboxProvider {
       });
     } catch {
       if (signal.aborted) throw signal.reason;
-      throw new Error("Boat file upload failed");
+      throw new SandboxUnresponsiveError("Boat file upload failed");
     }
     await response.body?.cancel().catch(() => undefined);
-    if (!response.ok) throw new Error(`Boat file upload failed (HTTP ${response.status})`);
+    if (!response.ok) throw transferError("upload", response.status);
   }
 
   private async readRemoteFile(
@@ -1149,11 +1155,11 @@ export class BoatSandboxProvider implements SandboxProvider {
       });
     } catch {
       if (downloadSignal.aborted) throw downloadSignal.reason;
-      throw new Error("Boat file download failed");
+      throw new SandboxUnresponsiveError("Boat file download failed");
     }
     if (!response.ok) {
       await response.body?.cancel().catch(() => undefined);
-      throw new Error(`Boat file download failed (HTTP ${response.status})`);
+      throw transferError("download", response.status);
     }
     return response;
   }
@@ -1278,7 +1284,14 @@ export class BoatSandboxProvider implements SandboxProvider {
         }
       }
     } catch (error) {
-      if (signal?.aborted || !(timeout.aborted || error instanceof BoatApiError)) throw error;
+      // A rate limit, or the SDK's own idle timer ending the attach (on its request, or while it
+      // waits at the request gate), leaves the command to status polls too.
+      const unavailable =
+        timeout.aborted ||
+        error instanceof BoatApiError ||
+        error instanceof SandboxRateLimitError ||
+        isAbortError(error instanceof FetchError ? error.cause : error);
+      if (signal?.aborted || !unavailable) throw error;
     }
     return undefined;
   }
@@ -1386,6 +1399,12 @@ function logRecovery(
   getLogger().warn("sandbox.recover", { provider: "boat", step, ...(reason ? { reason } : {}) });
 }
 
+/** A signed transfer Boat failed on its side is an outage there, like any other Boat call. */
+function transferError(direction: "upload" | "download", status: number): Error {
+  const message = `Boat file ${direction} failed (HTTP ${status})`;
+  return status >= 500 ? new SandboxUnresponsiveError(message) : new Error(message);
+}
+
 /** Boat deletes a stopped sandbox's data after 14 days but keeps the record; it cannot resume. */
 /** Named so the shared `isSandboxGoneError` lets callers replace it from its last checkpoint. */
 function boatSandboxGone(sandboxId: string, cause?: unknown): Error {
@@ -1467,7 +1486,7 @@ function boatClient(api: BoatSandboxSdk, apiKey: string, gate: BoatRequestGate):
     getSavedSnapshot: boatCall(api.getSavedSnapshot.bind(api), true),
     hostPort: sandboxCall(api.hostPort.bind(api), true),
     recover: startCall("recover", sandboxCall(api.recover.bind(api))),
-    resume: startCall("resume", sandboxCall(api.resume.bind(api))),
+    resume: startCall("resume", sandboxCall(api.resume.bind(api), true)),
     saveSavedSnapshot: boatCall(api.saveSavedSnapshot.bind(api)),
     stop: sandboxCall(api.stop.bind(api)),
     update: sandboxCall(api.update.bind(api), true),
@@ -1715,9 +1734,6 @@ export function archiveBoatWorkspaceCommand(
   options: { limits?: WorkspaceExportLimits; workspace?: string } = {},
 ): string {
   const { limits, workspace = BOAT_WORKSPACE } = options;
-  const names = (set: ReadonlySet<string>) =>
-    [...set].map((name) => `-name ${shellQuote(name)}`).join(" -o ");
-  const profiles = shellQuote(`./${path.posix.relative(BOAT_WORKSPACE, BOAT_BROWSER_PROFILES)}/*`);
   const tolerated = BOAT_ARCHIVE_TOLERATED_ERRORS.map(
     (error) => `-e ${shellQuote(`${error}$`)}`,
   ).join(" ");
@@ -1731,8 +1747,8 @@ export function archiveBoatWorkspaceCommand(
     // Names start with `./`, so tar never reads one as an option.
     "(",
     boatListingWalk(
-      // Skipped browser state is neither counted toward the limits nor read.
-      `. -mindepth 1 \\( -type d -path ${profiles} \\( ${names(SKIPPED_BROWSER_PROFILE_DIRECTORIES)} \\) -prune \\) -o \\( -type f -path ${profiles} \\( ${names(SKIPPED_BROWSER_PROFILE_FILES)} \\) \\) -o -type f -fprintf "$archive.sizes" '%s\\n'`,
+      // Excluded home content is neither counted toward the limits nor read.
+      `. ${workspaceSaveFindExpression()} -fprintf "$archive.sizes" '%s\\n'`,
       [],
       "%p\\0",
     ),

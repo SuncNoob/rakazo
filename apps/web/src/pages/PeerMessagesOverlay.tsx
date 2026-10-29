@@ -13,10 +13,12 @@ import {
 } from "@rakazo/ui-web";
 import { useQuery } from "@tanstack/react-query";
 import { useLayoutEffect, useMemo, useRef } from "react";
+import { ArtifactFileCard } from "../components/ArtifactFileCard";
 import { desktopBridge } from "../lib/desktop";
 import { useSpaceQueries } from "../lib/query";
 import { rpc } from "../lib/rpc";
 import { transcriptIsNearEnd } from "../lib/transcript-scroll";
+import { ArtifactImage } from "./shell/message-cards";
 import { WindowChrome } from "./WindowChrome";
 
 /**
@@ -91,25 +93,33 @@ export function PeerMessagesOverlay({
         <div className="app-drag flex items-center justify-between gap-4 border-b border-sidebar-border px-[18px] py-3.5">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             {desktopBridge() ? <WindowChrome /> : null}
-            <div className="flex items-center -space-x-2">
-              <BotAvatar avatarSet={botAvatarSet} color={botColor} identity={botId} size={28} />
+            <DialogTitle
+              className="mx-auto flex min-w-0 items-center gap-2 rounded-full bg-muted px-4 py-2 text-[13px] font-medium"
+              dir="auto"
+            >
+              <BotAvatar avatarSet={botAvatarSet} color={botColor} identity={botId} size={20} />
+              <span className="truncate" style={{ color: botColor }}>
+                {botName}
+              </span>
+              <span className="text-muted-foreground" aria-hidden="true">
+                ⇄
+              </span>
               <BotAvatar
                 avatarSet={peerBotAvatarSet}
                 color={peerBotColor}
                 identity={peerBotId}
-                size={28}
+                size={20}
               />
-            </div>
-            <DialogTitle className="flex min-w-0 gap-2 text-[15.5px] font-medium" dir="auto">
-              <span className="truncate text-foreground">{botName}</span>
-              <span className="truncate text-muted-foreground">{peerBotName}</span>
+              <span className="truncate" style={{ color: peerBotColor }}>
+                {peerBotName}
+              </span>
             </DialogTitle>
           </div>
           <DialogClose
-            aria-label={t`Close`}
+            aria-label={t`Close Chat`}
             render={<Button variant="ghost" size="sm" className="app-no-drag" />}
           >
-            <Trans>Close</Trans>
+            <Trans>Close Chat</Trans>
           </DialogClose>
         </div>
 
@@ -162,11 +172,34 @@ export function PeerMessagesOverlay({
                       sent ? "bg-accent" : "bg-muted"
                     }`}
                   >
-                    <div className="mb-1 text-[12px] text-muted-foreground/70" dir="auto">
+                    <div
+                      className="mb-1 text-[12px] font-medium"
+                      style={{ color: sent ? botColor : peerBotColor }}
+                      dir="auto"
+                    >
                       {sent ? botName : peerBotName}
                     </div>
                     <div className="text-[14.5px] leading-[1.5] text-foreground/90" dir="auto">
                       <ChatMarkdown>{peerMessage.text}</ChatMarkdown>
+                      {peerMessage.blocks?.map((block, index) =>
+                        block.kind === "image" ? (
+                          <ArtifactImage
+                            key={index}
+                            target={{ botId }}
+                            artifactId={block.artifactId}
+                            name={block.name}
+                          />
+                        ) : block.kind === "file" ? (
+                          <ArtifactFileCard
+                            key={index}
+                            target={{ botId }}
+                            artifactId={block.artifactId}
+                            name={block.name}
+                            mimeType={block.mimeType}
+                            size={block.size}
+                          />
+                        ) : null,
+                      )}
                     </div>
                   </div>
                 </div>
@@ -174,12 +207,6 @@ export function PeerMessagesOverlay({
             })}
           </div>
         )}
-
-        <div className="flex items-center gap-4 border-t border-sidebar-border px-[18px] py-3.5">
-          <p className="text-[13.5px] text-muted-foreground/80">
-            <Trans>This chat is view-only</Trans>
-          </p>
-        </div>
       </DialogContent>
     </Dialog>
   );
