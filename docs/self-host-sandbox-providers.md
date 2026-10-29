@@ -142,38 +142,10 @@ SDK is not committed; fetch the pinned release before building the web app:
 node scripts/wuying-web-sdk.mjs
 ```
 
-The SDK runs inside an opaque-origin sandbox (`allow-scripts allow-pointer-lock`, without
-`allow-same-origin`). Both its launcher and nested runtime receive disposable in-memory
-Storage and a no-op cookie accessor before vendor code runs. Screen state uses the existing
-`rakazoScreen` messages; the app accepts only its exact iframe window as the sender. The
-one-time login code stays in the frame URL fragment, outside HTTP requests and Referer.
-The app's CSP is unchanged; only `/wuying/` permits the vendor's CDN, regional API/gateway
-hosts, blob workers and WebAssembly compilation (`wasm-unsafe-eval`, not JavaScript `unsafe-eval`).
-
-To verify the real pinned SDK locally in headless Chromium, without a real account:
-
-```bash
-node scripts/wuying-screen-check.mjs
-```
-
-This checks both opaque frames, parent DOM/cookie/storage denial, the Storage/cookie shims,
-blob workers with blob imports and WASM, and startup through a rejected fake login code with
-no uncaught exceptions or CSP violations. It does not verify an authenticated desktop,
-WebRTC media, clipboard permissions or post-login decoder/file-transfer paths.
-
-The pinned launcher, `index.js` and ASP `asp.sdk.js` were inspected for opaque-origin
-requirements (including the ASP runtime's decoded string table and embedded worker code):
-
-| API | Finding |
-| --- | --- |
-| Storage / cookies | Unguarded access in both windows; shimmed before either SDK script |
-| Worker | ASP's worker loader and the optional download module already create blob URLs; the scoped CSP allows blob workers and blob script imports |
-| WebAssembly | Embedded modules and absolute versioned CDN decoder URLs; the decoder sets `locateFile`, so no app-relative WASM fetch is required. Startup requires `wasm-unsafe-eval` |
-| SharedWorker / IndexedDB / BroadcastChannel | No uses found |
-| ServiceWorker | Optional file-download helper only (`getRegistration`); not used to initialise or connect the screen. Registration is unavailable in this sandbox |
-| `document.domain` | Legacy Object.create/ActiveX polyfill branches only, unused in modern Chromium |
-| `parent` / `top` | Window references for messaging; DingTalk top-window inspection catches cross-origin errors. Parent DOM access remains blocked |
-| Credentialed fetch | Vendor HTTP/decoder helpers support credentials; the scoped `connect-src` excludes the app origin. Login uses the one-time code, with no app credentials |
+The SDK runs in an opaque-origin sandboxed frame with an in-memory storage shim and a no-op
+cookie accessor in both its launcher and nested runtime. A CSP scoped to `/wuying/` permits
+the vendor hosts, blob workers and WebAssembly compilation. The one-time login code stays
+only in the URL fragment, outside HTTP requests and Referer.
 
 Wuying supports **Team Computers only**; starting or reconnecting a Private Computer is refused.
 All bots, users and spaces configured with this provider share the same Windows desktop and

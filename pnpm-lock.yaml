@@ -604,8 +604,8 @@ importers:
         specifier: 1.1.3
         version: 1.1.3
       '@alicloud/ecd20200930':
-        specifier: 5.5.2
-        version: 5.5.2
+        specifier: 5.5.0
+        version: 5.5.0
       '@alicloud/openapi-core':
         specifier: 1.0.8
         version: 1.0.8
@@ -1180,8 +1180,8 @@ packages:
   '@alicloud/darabonba-string@1.0.3':
     resolution: {integrity: sha512-NyWwrU8cAIesWk3uHL1Q7pTDTqLkCI/0PmJXC4/4A0MFNAZ9Ouq0iFBsRqvfyUujSSM+WhYLuTfakQXiVLkTMA==}
 
-  '@alicloud/ecd20200930@5.5.2':
-    resolution: {integrity: sha512-w4PMnS3M/m3OkVE/j9V7p9z7t0NdEke1gCAur5cS0OSItl7HwIGclz/EcC1YGaf27KcngeIz/dMQ8mCGuvshmw==}
+  '@alicloud/ecd20200930@5.5.0':
+    resolution: {integrity: sha512-xXv2aPP6paTl3OZ70p+bBu21NxQgUDzd6W45v00QNFErX6azPqMLI3925Zn67xLqSYAesERAaNBRM05Ncf8w+g==}
 
   '@alicloud/endpoint-util@0.0.1':
     resolution: {integrity: sha512-+pH7/KEXup84cHzIL6UJAaPqETvln4yXlD9JzlrqioyCSaWxbug5FUobsiI6fuUOpw5WwoB3fWAtGbFnJ1K3Yg==}
@@ -11394,7 +11394,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@alicloud/ecd20200930@5.5.2':
+  '@alicloud/ecd20200930@5.5.0':
     dependencies:
       '@alicloud/openapi-core': 1.0.8
       '@darabonba/typescript': 1.0.5

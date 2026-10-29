@@ -109,7 +109,11 @@ export class WuyingOpenApi implements WuyingControlPlane {
 
   private load() {
     this.clients ??= loadClients(this.config);
-    return this.clients;
+    const pending = this.clients;
+    pending.catch(() => {
+      if (this.clients === pending) this.clients = undefined;
+    });
+    return pending;
   }
 
   private async call<T>(

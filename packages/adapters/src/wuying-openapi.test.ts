@@ -18,6 +18,24 @@ const signal = () => new AbortController().signal;
 afterEach(() => vi.restoreAllMocks());
 
 describe("Wuying official SDK control plane", () => {
+  it("retries a failed client construction and caches the successful load", async () => {
+    const construct = vi.spyOn(EcdClient.prototype, "checkConfig").mockImplementationOnce(() => {
+      throw new Error("SDK setup failed");
+    });
+    const call = vi.spyOn(EcdClient.prototype, "callApi").mockResolvedValue({
+      body: { Desktops: [{ DesktopId: "ecd-fake", DesktopStatus: "Running" }] },
+    });
+    const client = api();
+    await expect(client.desktopStatus("ecd-fake", signal())).rejects.toEqual(
+      new SandboxUnresponsiveError("Wuying DescribeDesktops failed"),
+    );
+    expect(call).not.toHaveBeenCalled();
+    expect(await client.desktopStatus("ecd-fake", signal())).toBe("Running");
+    expect(await client.desktopStatus("ecd-fake", signal())).toBe("Running");
+    expect(construct).toHaveBeenCalledTimes(2);
+    expect(call).toHaveBeenCalledTimes(2);
+  });
+
   it("uses official request serialization and reads SDK response models for all four calls", async () => {
     const desktop = vi.spyOn(EcdClient.prototype, "callApi").mockResolvedValue({
       body: { Desktops: [{ DesktopId: "ecd-fake", DesktopStatus: "Running" }] },
