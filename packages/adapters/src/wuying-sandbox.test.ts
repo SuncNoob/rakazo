@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { isSandboxGoneError } from "./sandbox-errors.js";
 import { assertSandboxWorkspaceContract, provisionPrepared } from "./sandbox-test-support.js";
 import { signRpcQuery, WuyingOpenApi } from "./wuying-openapi.js";
+import { quoteWindowsArgument } from "./wuying-sandbox.js";
 import { FAKE_PROFILE, FakeWuyingDesktop } from "./wuying-sandbox.test-support.js";
 
 // Power polling advances a virtual clock, so start and stop tests run instantly.
@@ -23,7 +24,9 @@ const ctx = {
 
 async function run(desktop: FakeWuyingDesktop, computer: ComputerRef, argv: string[]) {
   const events: ProcessEvent[] = [];
-  for await (const event of desktop.provider().execute(computer, { argv }, ctx)) events.push(event);
+  // Within the gateway's one-minute call, a command runs through process_exec.
+  for await (const event of desktop.provider().execute(computer, { argv, timeoutMs: 30_000 }, ctx))
+    events.push(event);
   return events;
 }
 
@@ -110,6 +113,66 @@ describe("WuyingSandboxProvider", () => {
       type: "exit",
       code: 124,
     });
+  });
+
+  it("runs a command allowed over a minute detached and streams its output", async () => {
+    const desktop = new FakeWuyingDesktop();
+    const provider = desktop.provider();
+    const computer = await provisionPrepared(provider, { botId: "bot", homePath: "/h" }, ctx);
+    desktop.background = { stdout: "第 1 行\r\n", stderr: "warn", code: 7, polls: 2 };
+    const events: ProcessEvent[] = [];
+    for await (const event of provider.execute(
+      computer,
+      { argv: ["powershell.exe", "-Command", "npm install"], timeoutMs: 600_000 },
+      ctx,
+    ))
+      events.push(event);
+    expect(events).toEqual([
+      { type: "stdout", data: "第 1 行\r\n" },
+      { type: "stderr", data: "warn" },
+      { type: "exit", code: 7 },
+    ]);
+    expect(desktop.calls.some((call) => call.tool === "process_exec")).toBe(false);
+    // The command reaches PowerShell through a file, untouched by command-line quoting.
+    expect(desktop.backgroundCommand).toMatch(/^\[Console\]::OutputEncoding=.*npm install$/);
+    const launch = desktop.calls.find((call) => call.tool === "app_start");
+    const dir = /'([^']+)\\run\.ps1'/.exec(
+      String((launch?.args.args as string[] | undefined)?.at(-1)),
+    )?.[1];
+    expect(dir?.startsWith(`${FAKE_PROFILE}\\rakazo\\.runs\\`)).toBe(true);
+    expect(desktop.has(dir ?? "")).toBe(false);
+  });
+
+  it("stops a detached command when its run is cancelled", async () => {
+    const desktop = new FakeWuyingDesktop();
+    const provider = desktop.provider();
+    const computer = await provisionPrepared(provider, { botId: "bot", homePath: "/h" }, ctx);
+    desktop.background = { stdout: "started", code: null };
+    const abort = new AbortController();
+    const events: ProcessEvent[] = [];
+    await expect(
+      (async () => {
+        for await (const event of provider.execute(
+          computer,
+          { argv: ["ping.exe", "-t", "127.0.0.1"], timeoutMs: 600_000 },
+          { ...ctx, signal: abort.signal },
+        )) {
+          events.push(event);
+          abort.abort(new Error("cancelled"));
+        }
+      })(),
+    ).rejects.toThrow("cancelled");
+    expect(events).toEqual([{ type: "stdout", data: "started" }]);
+    expect(desktop.calls.some((call) => call.tool === "app_stop")).toBe(true);
+    expect(desktop.calls.at(-1)).toMatchObject({ tool: "fs_delete", args: { recursive: true } });
+  });
+
+  it("quotes arguments the way Windows reads them back", () => {
+    expect(quoteWindowsArgument("plain")).toBe("plain");
+    expect(quoteWindowsArgument("")).toBe('""');
+    expect(quoteWindowsArgument("a b")).toBe('"a b"');
+    expect(quoteWindowsArgument('c"d')).toBe('"c\\"d"');
+    expect(quoteWindowsArgument("C:\\dir with space\\")).toBe('"C:\\dir with space\\\\"');
   });
 
   it("maps actions from the scaled screenshot back to desktop pixels", async () => {

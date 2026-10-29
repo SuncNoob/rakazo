@@ -15,6 +15,14 @@ export class FakeWuyingDesktop implements WuyingDesktopTools, WuyingControlPlane
   readonly control: string[] = [];
   /** Scripted result for the next process_exec, or the default `echo` behaviour. */
   exec?: (args: Record<string, unknown>) => Record<string, unknown>;
+  /**
+   * What a background command prints and returns. It writes its output when started and its exit
+   * code once the provider has looked for the exit file `polls` times; null never exits.
+   */
+  background?: { stdout: string; stderr?: string; code: number | null; polls?: number };
+  /** The PowerShell command text of the last background run. */
+  backgroundCommand?: string;
+  private running?: { exit: string; code: number | null; polls: number };
   private readonly files = new Map<string, Entry>();
 
   constructor() {
@@ -28,6 +36,10 @@ export class FakeWuyingDesktop implements WuyingDesktopTools, WuyingControlPlane
       this,
       this,
     );
+  }
+
+  private write(path: string, text: string) {
+    this.files.set(key(path), { path, kind: "file", content: Buffer.from(text, "utf8") });
   }
 
   has(path: string) {
@@ -67,6 +79,14 @@ export class FakeWuyingDesktop implements WuyingDesktopTools, WuyingControlPlane
       case "env_get":
         return result({ name: args.name, value: args.name === "USERPROFILE" ? FAKE_PROFILE : "" });
       case "fs_info": {
+        if (this.running && key(path) === key(this.running.exit)) {
+          const running = this.running;
+          running.polls -= 1;
+          if (running.polls <= 0 && running.code !== null) {
+            this.write(running.exit, String(running.code));
+            this.running = undefined;
+          }
+        }
         const entry = this.files.get(key(path));
         if (!entry) throw new WuyingToolError(tool, "not_found", "entity not found");
         return result({ kind: entry.kind, path });
@@ -128,6 +148,32 @@ export class FakeWuyingDesktop implements WuyingDesktopTools, WuyingControlPlane
         const echo = argv[0] === "echo" ? argv.slice(1).join(" ") : argv.at(-1);
         return result({ status: "completed", exit_code: 0, stdout: `${echo}\r\n`, stderr: "" });
       }
+      case "app_start": {
+        // The launcher runs run.ps1, which names the files the command's output goes to.
+        const script = /'([^']+run\.ps1)'/.exec(String((args.args as string[]).at(-1)))?.[1];
+        const run = script ? this.read(script)?.toString("utf8") : undefined;
+        const out = run && /-RedirectStandardOutput '([^']+)'/.exec(run)?.[1];
+        const err = run && /-RedirectStandardError '([^']+)'/.exec(run)?.[1];
+        const exit = run && /-Destination '([^']+)'/.exec(run)?.[1];
+        if (!out || !err || !exit)
+          throw new WuyingToolError(tool, "invalid", "unexpected launcher");
+        this.backgroundCommand = this.read(`${parent(script ?? "")}\\command.ps1`)?.toString(
+          "utf8",
+        );
+        // Unscripted, a background command echoes its arguments like process_exec does.
+        const echoed = /-ArgumentList '((?:[^']|'')*)'/.exec(run)?.[1]?.replace(/''/g, "'");
+        const background = this.background ?? {
+          stdout: `${this.backgroundCommand ?? echoed ?? ""}\r\n`,
+          code: 0,
+        };
+        this.write(out, background.stdout);
+        this.write(err, background.stderr ?? "");
+        this.running = { exit, code: background.code, polls: background.polls ?? 1 };
+        return result({ app_id: "app-1", status: "launched", stdio: "null" });
+      }
+      case "app_stop":
+        this.running = undefined;
+        return result({ app_id: args.app_id, stopped: true });
       case "screen_capture":
         return result(
           {

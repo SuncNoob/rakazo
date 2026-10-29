@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import type {
   AdapterContext,
@@ -41,6 +42,9 @@ const MAX_FILE_BYTES = 16 * 1024 * 1024;
 const LIST_LIMIT = 1_000;
 const OUTPUT_LIMIT = 16 * 1024;
 const MAX_COMMAND_MS = 60_000;
+const RUN_POLL_MS = 1_000;
+/** Output a background command may stream per stream before the rest is dropped. */
+const MAX_STREAM_BYTES = 8 * 1024 * 1024;
 const HOME_KEY = /^[A-Za-z0-9_-]+$/;
 /** Windows has no executable bit, so each home records which of its files carry one. */
 const EXECUTABLES_FILE = ".rakazo-executables.json";
@@ -166,6 +170,61 @@ function utf8Output(argv: string[]): string[] {
   return next;
 }
 
+/** One argument quoted the way Windows' CommandLineToArgvW reads it back. */
+export function quoteWindowsArgument(argument: string) {
+  if (argument && !/[\s"]/.test(argument)) return argument;
+  let quoted = '"';
+  let slashes = 0;
+  for (const char of argument) {
+    if (char === "\\") {
+      slashes += 1;
+      continue;
+    }
+    quoted += "\\".repeat(char === '"' ? slashes * 2 + 1 : slashes) + char;
+    slashes = 0;
+  }
+  return `${quoted}${"\\".repeat(slashes * 2)}"`;
+}
+
+/** A PowerShell single-quoted string literal. */
+function psLiteral(value: string) {
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+/** Runs a UTF-8 script file without the execution policy that gates `-File`. */
+function psRunFile(path: string) {
+  return `Invoke-Expression (Get-Content -Raw -Encoding UTF8 -LiteralPath ${psLiteral(path)})`;
+}
+
+const HIDDEN_POWERSHELL = ["-NoLogo", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden"];
+
+/**
+ * Starts the command with its output redirected to files and records its exit code last, so a
+ * caller can read the output while it runs and knows it ended once the exit file exists.
+ */
+function backgroundRunScript(
+  program: string,
+  args: string[],
+  paths: { cwd: string; out: string; err: string; exit: string },
+) {
+  const commandLine = args.map(quoteWindowsArgument).join(" ");
+  return [
+    "$ErrorActionPreference = 'Stop'",
+    "$code = 127",
+    "try {",
+    `  $p = Start-Process -FilePath ${psLiteral(program)}${commandLine ? ` -ArgumentList ${psLiteral(commandLine)}` : ""} -WorkingDirectory ${psLiteral(paths.cwd)} -RedirectStandardOutput ${psLiteral(paths.out)} -RedirectStandardError ${psLiteral(paths.err)} -NoNewWindow -PassThru`,
+    // Reading the handle first keeps ExitCode available after the wait.
+    "  $null = $p.Handle",
+    "  $p.WaitForExit()",
+    "  $code = $p.ExitCode",
+    "} catch {",
+    `  [IO.File]::WriteAllText(${psLiteral(paths.err)}, $_.Exception.Message)`,
+    "}",
+    `[IO.File]::WriteAllText(${psLiteral(`${paths.exit}.tmp`)}, [string]$code)`,
+    `Move-Item -LiteralPath ${psLiteral(`${paths.exit}.tmp`)} -Destination ${psLiteral(paths.exit)}`,
+  ].join("\r\n");
+}
+
 function parseData(text: string): unknown {
   try {
     return (JSON.parse(text) as { data?: unknown }).data;
@@ -194,6 +253,8 @@ export class WuyingSandboxProvider implements SandboxProvider {
   private profile?: Promise<string>;
   private readonly scales = new Map<string, ScreenScale>();
   private readonly pointers = new Map<string, PointerDown>();
+  /** Background commands still running, by the run that started them. */
+  private readonly runApps = new Map<string, Set<string>>();
 
   constructor(
     private readonly options: Pick<WuyingSandboxOptions, "desktopId" | "endUserId"> & {
@@ -245,13 +306,27 @@ export class WuyingSandboxProvider implements SandboxProvider {
     };
   }
 
-  /** Commands run to completion inside process_exec, so nothing is left running in the background. */
+  /** Every command, short or long, ends with its execute call, so nothing outlives a run. */
   async inspectBackgroundWork(): Promise<"idle"> {
     return "idle";
   }
 
-  /** process_exec bounds every command by its timeout; there is no detached run work to stop. */
-  async cancelRunWork() {}
+  async cancelRunWork(
+    _computer: ComputerRef,
+    _computerId: string,
+    runId: string,
+    context: AdapterContext,
+  ) {
+    const apps = this.runApps.get(runId);
+    if (!apps) return;
+    await Promise.all(
+      [...apps].map((appId) =>
+        this.tools
+          .call("app_stop", { app_id: appId, force: true }, context.signal)
+          .catch(() => undefined),
+      ),
+    );
+  }
 
   async isRunning(computer: ComputerRef, context: AdapterContext) {
     if (computer.providerRef !== this.options.desktopId) return false;
@@ -317,7 +392,7 @@ export class WuyingSandboxProvider implements SandboxProvider {
     request: CommandRequest,
     context: AdapterContext,
   ): AsyncIterable<ProcessEvent> {
-    const [program, ...args] = utf8Output(
+    const [program = "cmd.exe", ...args] = utf8Output(
       request.argv.length ? request.argv : ["cmd.exe", "/c", "echo ready"],
     );
     const cwd = request.cwd
@@ -327,6 +402,11 @@ export class WuyingSandboxProvider implements SandboxProvider {
     const env = { ...request.env };
     // The gateway's environment overlay has no unset; an empty value is the closest it offers.
     for (const name of request.unsetEnv ?? []) env[name] = "";
+    const timeoutMs = boundedSandboxCommandTimeoutMs(request.timeoutMs);
+    if (timeoutMs > MAX_COMMAND_MS) {
+      yield* this.executeInBackground({ program, args, cwd, env, timeoutMs }, context);
+      return;
+    }
     const { data } = await this.tools.call(
       "process_exec",
       {
@@ -335,7 +415,7 @@ export class WuyingSandboxProvider implements SandboxProvider {
         cwd,
         env,
         output_limit: OUTPUT_LIMIT,
-        timeout_ms: Math.min(boundedSandboxCommandTimeoutMs(request.timeoutMs), MAX_COMMAND_MS),
+        timeout_ms: timeoutMs,
       },
       context.signal,
     );
@@ -355,6 +435,149 @@ export class WuyingSandboxProvider implements SandboxProvider {
       return;
     }
     yield { type: "exit", code: typeof result.exit_code === "number" ? result.exit_code : 1 };
+  }
+
+  /**
+   * A command allowed more than the gateway's one-minute call runs detached: its output goes to
+   * files that are read back every second, which also streams it while it runs.
+   */
+  private async *executeInBackground(
+    command: {
+      program: string;
+      args: string[];
+      cwd: string;
+      env: Record<string, string>;
+      timeoutMs: number;
+    },
+    context: AdapterContext,
+  ): AsyncIterable<ProcessEvent> {
+    const { signal } = context;
+    const dir = `${await this.userProfile(signal)}\\rakazo\\.runs\\${randomUUID()}`;
+    const paths = {
+      cwd: command.cwd,
+      out: `${dir}\\stdout`,
+      err: `${dir}\\stderr`,
+      exit: `${dir}\\exit`,
+    };
+    await this.mkdirs(dir, signal);
+    let { program, args } = command;
+    const script = args.indexOf("-Command");
+    // A PowerShell command goes through a file, so no quoting can change what it says.
+    if (/^(powershell|pwsh)(\.exe)?$/i.test(program) && script >= 0 && script + 1 < args.length) {
+      await this.tools.call(
+        "fs_write",
+        { path: `${dir}\\command.ps1`, data: args[script + 1], encoding: "utf8", overwrite: true },
+        signal,
+      );
+      args = [...args.slice(0, script + 1), psRunFile(`${dir}\\command.ps1`)];
+    }
+    await this.tools.call(
+      "fs_write",
+      {
+        path: `${dir}\\run.ps1`,
+        data: backgroundRunScript(program, args, paths),
+        encoding: "utf8",
+        overwrite: true,
+      },
+      signal,
+    );
+    program = "powershell.exe";
+    const { data } = await this.tools.call(
+      "app_start",
+      {
+        program,
+        args: [...HIDDEN_POWERSHELL, "-Command", psRunFile(`${dir}\\run.ps1`)],
+        cwd: command.cwd,
+        env: command.env,
+      },
+      signal,
+    );
+    const appId = (data as { app_id?: string }).app_id;
+    if (!appId) throw new SandboxUnresponsiveError("The computer did not start the command");
+    const runId = context.runId;
+    if (runId) {
+      const apps = this.runApps.get(runId) ?? new Set<string>();
+      apps.add(appId);
+      this.runApps.set(runId, apps);
+    }
+    const streams = {
+      stdout: { path: paths.out, offset: 0, decoder: new TextDecoder() },
+      stderr: { path: paths.err, offset: 0, decoder: new TextDecoder() },
+    };
+    const drain = async function* (
+      this: WuyingSandboxProvider,
+      final: boolean,
+    ): AsyncIterable<ProcessEvent> {
+      for (const type of ["stdout", "stderr"] as const) {
+        const stream = streams[type];
+        let text = "";
+        while (stream.offset < MAX_STREAM_BYTES) {
+          const chunk = await this.readChunk(stream.path, stream.offset, signal);
+          if (!chunk.length) break;
+          stream.offset += chunk.length;
+          text += stream.decoder.decode(chunk, { stream: true });
+          if (chunk.length < READ_CHUNK_BYTES) break;
+        }
+        if (final) text += stream.decoder.decode();
+        if (text) yield { type, data: text };
+      }
+    };
+    const deadline = Date.now() + command.timeoutMs;
+    let finished = false;
+    try {
+      for (;;) {
+        signal.throwIfAborted();
+        const exited = await this.exists(paths.exit, signal);
+        yield* drain.call(this, exited);
+        if (exited) {
+          finished = true;
+          const code = Number.parseInt(
+            Buffer.from(await this.readChunk(paths.exit, 0, signal)).toString("utf8"),
+            10,
+          );
+          if (
+            streams.stdout.offset >= MAX_STREAM_BYTES ||
+            streams.stderr.offset >= MAX_STREAM_BYTES
+          )
+            yield { type: "stderr", data: "\n[output truncated at 8 MiB]\n" };
+          yield { type: "exit", code: Number.isSafeInteger(code) ? code : 1 };
+          return;
+        }
+        if (Date.now() >= deadline) {
+          yield { type: "stderr", data: "command timed out" };
+          yield { type: "exit", code: 124 };
+          return;
+        }
+        await sleep(RUN_POLL_MS, undefined, { signal });
+      }
+    } finally {
+      if (runId) this.runApps.get(runId)?.delete(appId);
+      // Stopping and cleanup must not use the run's signal, which may be what ended it.
+      const cleanup = AbortSignal.timeout(15_000);
+      if (!finished) {
+        await this.tools
+          .call("app_stop", { app_id: appId, force: true }, cleanup)
+          .catch(() => undefined);
+      }
+      await this.tools
+        .call("fs_delete", { path: dir, recursive: true }, cleanup)
+        .catch(() => undefined);
+    }
+  }
+
+  /** Up to one gateway read of a file from an offset; a file not written yet reads as empty. */
+  private async readChunk(path: string, offset: number, signal: AbortSignal) {
+    try {
+      const { data } = await this.tools.call(
+        "fs_read",
+        { path, encoding: "base64", offset, max_bytes: READ_CHUNK_BYTES },
+        signal,
+      );
+      return Buffer.from((data as { data?: string }).data ?? "", "base64");
+    } catch (error) {
+      if (error instanceof WuyingToolError && error.code === "not_found") return Buffer.alloc(0);
+      throw error;
+    }
   }
 
   /**

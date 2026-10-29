@@ -142,8 +142,9 @@ node scripts/wuying-web-sdk.mjs
 ```
 
 Every bot shares the one desktop, so Private Computers are not isolated from each other on it.
-The gateway bounds each call: a command runs for at most one minute and returns at most 16 KiB
-of output, and a folder listing returns at most 1,000 entries.
+The gateway bounds each call to one minute, 16 KiB of command output and 1,000 folder entries.
+A command allowed longer than a minute runs detached with its output in files under
+`%USERPROFILE%\rakazo\.runs`, read back every second and removed when it ends or is cancelled.
 
 ## `none`
 
