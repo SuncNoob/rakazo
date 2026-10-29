@@ -186,6 +186,90 @@ export function quoteWindowsArgument(argument: string) {
   return `${quoted}${"\\".repeat(slashes * 2)}"`;
 }
 
+// Key names as computer tools send them (X11 keysyms and common aliases), lowercased, mapped to
+// the gateway's own names and to SendKeys codes.
+const NAMED_KEYS: Record<string, { native?: string; sendKeys: string }> = {
+  return: { native: "Enter", sendKeys: "{ENTER}" },
+  enter: { native: "Enter", sendKeys: "{ENTER}" },
+  kp_enter: { native: "Enter", sendKeys: "{ENTER}" },
+  backspace: { native: "Backspace", sendKeys: "{BS}" },
+  tab: { native: "Tab", sendKeys: "{TAB}" },
+  escape: { native: "Escape", sendKeys: "{ESC}" },
+  esc: { native: "Escape", sendKeys: "{ESC}" },
+  space: { native: "Space", sendKeys: " " },
+  delete: { native: "Delete", sendKeys: "{DEL}" },
+  del: { native: "Delete", sendKeys: "{DEL}" },
+  home: { native: "Home", sendKeys: "{HOME}" },
+  end: { native: "End", sendKeys: "{END}" },
+  up: { native: "Up", sendKeys: "{UP}" },
+  down: { native: "Down", sendKeys: "{DOWN}" },
+  left: { native: "Left", sendKeys: "{LEFT}" },
+  right: { native: "Right", sendKeys: "{RIGHT}" },
+  prior: { native: "PageUp", sendKeys: "{PGUP}" },
+  page_up: { native: "PageUp", sendKeys: "{PGUP}" },
+  pageup: { native: "PageUp", sendKeys: "{PGUP}" },
+  next: { native: "PageDown", sendKeys: "{PGDN}" },
+  page_down: { native: "PageDown", sendKeys: "{PGDN}" },
+  pagedown: { native: "PageDown", sendKeys: "{PGDN}" },
+  insert: { sendKeys: "{INS}" },
+};
+const MODIFIERS: Record<string, { native: string; sendKeys?: string }> = {
+  ctrl: { native: "Control", sendKeys: "^" },
+  control: { native: "Control", sendKeys: "^" },
+  control_l: { native: "Control", sendKeys: "^" },
+  control_r: { native: "Control", sendKeys: "^" },
+  shift: { native: "Shift", sendKeys: "+" },
+  shift_l: { native: "Shift", sendKeys: "+" },
+  shift_r: { native: "Shift", sendKeys: "+" },
+  alt: { native: "Alt", sendKeys: "%" },
+  alt_l: { native: "Alt", sendKeys: "%" },
+  alt_r: { native: "Alt", sendKeys: "%" },
+  // SendKeys has no Windows key, so it can only be pressed alone.
+  super: { native: "Meta" },
+  super_l: { native: "Meta" },
+  meta: { native: "Meta" },
+  win: { native: "Meta" },
+  cmd: { native: "Meta" },
+};
+
+/**
+ * One key press as the gateway's key name when it is a single key, or as a SendKeys string when
+ * it needs modifiers held. Keys also arrive as `ctrl+a` in the key itself.
+ */
+export function windowsKeyChord(
+  key: string,
+  modifiers: readonly string[] = [],
+): { native: string; sendKeys?: undefined } | { native?: undefined; sendKeys: string } {
+  const parts = [...modifiers, ...(key.length > 1 ? key.split("+") : [key])]
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const main = parts.pop();
+  if (!main) throw new Error("No key to press");
+  const held = parts.map((part) => {
+    const modifier = MODIFIERS[part.toLowerCase()];
+    if (!modifier) throw new Error(`Unknown modifier key: ${part}`);
+    return modifier;
+  });
+  const lower = main.toLowerCase();
+  const fn = /^f([1-9]|1[0-6])$/.exec(lower);
+  const named = NAMED_KEYS[lower] ?? (fn ? { sendKeys: `{F${fn[1]}}` } : undefined);
+  const modifierOnly = MODIFIERS[lower];
+  if (!held.length) {
+    if (modifierOnly) return { native: modifierOnly.native };
+    if (named?.native) return { native: named.native };
+    if (main.length === 1) return { native: main };
+  }
+  if (held.some((modifier) => !modifier.sendKeys) || modifierOnly)
+    throw new Error("This key combination is not available on Windows computers");
+  let code: string;
+  if (named) code = named.sendKeys;
+  else if (main.length === 1 && /^[\x20-\x7e]$/.test(main))
+    // SendKeys reads these characters as syntax, and a capital letter as Shift plus the letter.
+    code = /[+^%~(){}[\]]/.test(main) ? `{${main}}` : main.toLowerCase();
+  else throw new Error(`Unknown key: ${main}`);
+  return { sendKeys: `${held.map((modifier) => modifier.sendKeys).join("")}${code}` };
+}
+
 /** A PowerShell single-quoted string literal. */
 function psLiteral(value: string) {
   return `'${value.replace(/'/g, "''")}'`;
@@ -565,6 +649,45 @@ export class WuyingSandboxProvider implements SandboxProvider {
     }
   }
 
+  /**
+   * The gateway presses one key per call and releases it before the next, so a chord goes to
+   * Windows' own SendKeys from a windowless script that leaves the foreground window focused.
+   */
+  private async sendKeys(keys: string, signal: AbortSignal) {
+    const dir = `${await this.userProfile(signal)}\\rakazo\\.runs\\${randomUUID()}`;
+    const done = `${dir}\\done`;
+    await this.mkdirs(dir, signal);
+    try {
+      await this.tools.call(
+        "fs_write",
+        {
+          path: `${dir}\\keys.vbs`,
+          data: [
+            `CreateObject("WScript.Shell").SendKeys "${keys.replace(/"/g, '""')}"`,
+            `CreateObject("Scripting.FileSystemObject").CreateTextFile("${done}").Close`,
+          ].join("\r\n"),
+          encoding: "utf8",
+          overwrite: true,
+        },
+        signal,
+      );
+      await this.tools.call(
+        "app_start",
+        { program: "wscript.exe", args: ["//B", "//Nologo", `${dir}\\keys.vbs`] },
+        signal,
+      );
+      const deadline = Date.now() + 10_000;
+      while (!(await this.exists(done, signal))) {
+        if (Date.now() >= deadline) throw new SandboxUnresponsiveError("The keys were not sent");
+        await sleep(200, undefined, { signal });
+      }
+    } finally {
+      await this.tools
+        .call("fs_delete", { path: dir, recursive: true }, AbortSignal.timeout(15_000))
+        .catch(() => undefined);
+    }
+  }
+
   /** Up to one gateway read of a file from an offset; a file not written yet reads as empty. */
   private async readChunk(path: string, offset: number, signal: AbortSignal) {
     try {
@@ -937,9 +1060,9 @@ export class WuyingSandboxProvider implements SandboxProvider {
       return;
     }
     if (action.kind === "key") {
-      // Modifiers cannot be held across calls, so a chord goes as one `ctrl+c` style key.
-      const key = [...(action.modifiers ?? []), action.key].join("+");
-      await this.tools.call("input_keyboard", { key, action: "press" }, signal);
+      const chord = windowsKeyChord(action.key, action.modifiers);
+      if (chord.sendKeys !== undefined) await this.sendKeys(chord.sendKeys, signal);
+      else await this.tools.call("input_keyboard", { key: chord.native, action: "press" }, signal);
       return;
     }
     if (action.kind === "pointer") {

@@ -20,6 +20,8 @@ export class FakeWuyingDesktop implements WuyingDesktopTools, WuyingControlPlane
    * code once the provider has looked for the exit file `polls` times; null never exits.
    */
   background?: { stdout: string; stderr?: string; code: number | null; polls?: number };
+  /** SendKeys strings the desktop received, in order. */
+  readonly sentKeys: string[] = [];
   /** The PowerShell command text of the last background run. */
   backgroundCommand?: string;
   private running?: { exit: string; code: number | null; polls: number };
@@ -149,6 +151,15 @@ export class FakeWuyingDesktop implements WuyingDesktopTools, WuyingControlPlane
         return result({ status: "completed", exit_code: 0, stdout: `${echo}\r\n`, stderr: "" });
       }
       case "app_start": {
+        if (args.program === "wscript.exe") {
+          const vbs = this.read(String((args.args as string[]).at(-1)))?.toString("utf8") ?? "";
+          const keys = /SendKeys "((?:[^"]|"")*)"/.exec(vbs)?.[1]?.replace(/""/g, '"');
+          const done = /CreateTextFile\("([^"]+)"\)/.exec(vbs)?.[1];
+          if (keys === undefined || !done) throw new WuyingToolError(tool, "invalid", "bad script");
+          this.sentKeys.push(keys);
+          this.write(done, "");
+          return result({ app_id: "keys", status: "launched", stdio: "null" });
+        }
         // The launcher runs run.ps1, which names the files the command's output goes to.
         const script = /'([^']+run\.ps1)'/.exec(String((args.args as string[]).at(-1)))?.[1];
         const run = script ? this.read(script)?.toString("utf8") : undefined;

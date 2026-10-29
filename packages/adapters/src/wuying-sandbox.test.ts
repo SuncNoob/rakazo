@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { isSandboxGoneError } from "./sandbox-errors.js";
 import { assertSandboxWorkspaceContract, provisionPrepared } from "./sandbox-test-support.js";
 import { signRpcQuery, WuyingOpenApi } from "./wuying-openapi.js";
-import { quoteWindowsArgument } from "./wuying-sandbox.js";
+import { quoteWindowsArgument, windowsKeyChord } from "./wuying-sandbox.js";
 import { FAKE_PROFILE, FakeWuyingDesktop } from "./wuying-sandbox.test-support.js";
 
 // Power polling advances a virtual clock, so start and stop tests run instantly.
@@ -167,6 +167,44 @@ describe("WuyingSandboxProvider", () => {
     expect(desktop.calls.at(-1)).toMatchObject({ tool: "fs_delete", args: { recursive: true } });
   });
 
+  it("presses single keys natively and sends chords through SendKeys", async () => {
+    const desktop = new FakeWuyingDesktop();
+    const provider = desktop.provider();
+    const computer = await provisionPrepared(provider, { botId: "bot", homePath: "/h" }, ctx);
+    await provider.act(
+      computer,
+      {
+        actions: [
+          { kind: "key", key: "Return" },
+          { kind: "key", key: "c", modifiers: ["ctrl"] },
+          { kind: "key", key: "ctrl+shift+Left" },
+        ],
+        observe: false,
+      },
+      ctx,
+    );
+    expect(
+      desktop.calls.filter((call) => call.tool === "input_keyboard").map((call) => call.args),
+    ).toEqual([{ key: "Enter", action: "press" }]);
+    expect(desktop.sentKeys).toEqual(["^c", "^+{LEFT}"]);
+    expect(
+      [...desktop.calls].reverse().find((call) => call.tool === "fs_delete")?.args.path,
+    ).toMatch(/\\rakazo\\.runs\\/);
+  });
+
+  it("maps key names to the gateway's names and SendKeys codes", () => {
+    expect(windowsKeyChord("BackSpace")).toEqual({ native: "Backspace" });
+    expect(windowsKeyChord("Prior")).toEqual({ native: "PageUp" });
+    expect(windowsKeyChord("a")).toEqual({ native: "a" });
+    expect(windowsKeyChord("super")).toEqual({ native: "Meta" });
+    expect(windowsKeyChord("A", ["ctrl"])).toEqual({ sendKeys: "^a" });
+    expect(windowsKeyChord("+", ["ctrl"])).toEqual({ sendKeys: "^{+}" });
+    expect(windowsKeyChord("F5")).toEqual({ sendKeys: "{F5}" });
+    expect(windowsKeyChord("Tab", ["alt"])).toEqual({ sendKeys: "%{TAB}" });
+    expect(() => windowsKeyChord("r", ["super"])).toThrow("not available");
+    expect(() => windowsKeyChord("c", ["hyper"])).toThrow("Unknown modifier");
+  });
+
   it("quotes arguments the way Windows reads them back", () => {
     expect(quoteWindowsArgument("plain")).toBe("plain");
     expect(quoteWindowsArgument("")).toBe('""');
@@ -200,7 +238,6 @@ describe("WuyingSandboxProvider", () => {
       { action: "click", button: "left", x: 200, y: 100 },
       { action: "move", x: 20, y: 20 },
       { action: "drag", button: "left", x: 20, y: 20, to_x: 40, to_y: 60 },
-      { key: "ctrl+c", action: "press" },
       { action: "scroll", scroll: -2 },
     ]);
   });
