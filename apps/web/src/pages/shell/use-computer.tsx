@@ -17,7 +17,7 @@ import {
 } from "@rakazo/core";
 import { Button, Spinner } from "@rakazo/ui-web";
 import type { RefObject } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ComputerMaintenanceActions } from "../../components/ComputerMaintenanceActions";
 import { computersAreUnavailable } from "../../components/ComputersUnavailableHint";
 import {
@@ -76,7 +76,6 @@ export function useComputerState({
   const bootsInFlight = useRef(new Map<string, symbol>());
   const [screenUrl, setScreenUrl] = useState<string | null>(null);
   const screenUrlRef = useRef(screenUrl);
-  screenUrlRef.current = screenUrl;
   const [screenUrlLoadedBotId, setScreenUrlLoadedBotId] = useState<string | null>(null);
   const [computerOpen, setComputerOpen] = useState(false);
   const [computerBotId, setComputerBotId] = useState<string | undefined>();
@@ -98,10 +97,14 @@ export function useComputerState({
   const [screenLoadError, setScreenLoadError] = useState<string | null>(null);
   // An error that replaced the screen waits for Retry rather than spending another login code.
   const screenErrorShown = useRef(false);
-  // A screen-read error stays hidden while a frame still shows the screen.
-  screenErrorShown.current = Boolean(
-    screenLoadError || (computerError && !computerErrorFromScreen),
-  );
+  // Synced before the frame's unmount cleanup runs, from committed renders only.
+  useLayoutEffect(() => {
+    screenUrlRef.current = screenUrl;
+    // A screen-read error stays hidden while a frame still shows the screen.
+    screenErrorShown.current = Boolean(
+      screenLoadError || (computerError && !computerErrorFromScreen),
+    );
+  });
   const screenFrameReported = useRef(false);
   // A screen that drops after connecting loads again by itself now and then, through the proxy's
   // full check, by remounting its frame.
