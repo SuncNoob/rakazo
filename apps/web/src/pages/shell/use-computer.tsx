@@ -96,6 +96,12 @@ export function useComputerState({
   // and the page reports its own state; nothing past "loading" by the timeout means it stalled.
   const [screenFrame, setScreenFrame] = useState<HTMLIFrameElement | null>(null);
   const [screenLoadError, setScreenLoadError] = useState<string | null>(null);
+  // An error that replaced the screen waits for Retry rather than spending another login code.
+  const screenErrorShown = useRef(false);
+  // A screen-read error stays hidden while a frame still shows the screen.
+  screenErrorShown.current = Boolean(
+    screenLoadError || (computerError && !computerErrorFromScreen),
+  );
   const screenFrameReported = useRef(false);
   // A screen that drops after connecting loads again by itself now and then, through the proxy's
   // full check, by remounting its frame.
@@ -218,7 +224,9 @@ export function useComputerState({
       setScreenUrl(null);
       // Another frame may still show this computer, such as the panel once the overlay closes.
       const botId = computerBotIdRef.current;
-      if (botId && computerVisible.current) void refreshComputerScreen(botId);
+      if (botId && computerVisible.current && !screenErrorShown.current) {
+        void refreshComputerScreen(botId);
+      }
     };
   }, [screenFrame]);
   useEffect(() => {
