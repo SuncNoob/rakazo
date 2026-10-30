@@ -75,6 +75,8 @@ export function useComputerState({
   const booting = bootingBotId !== null && bootingBotId === computer?.botId;
   const bootsInFlight = useRef(new Map<string, symbol>());
   const [screenUrl, setScreenUrl] = useState<string | null>(null);
+  const screenUrlRef = useRef(screenUrl);
+  screenUrlRef.current = screenUrl;
   const [screenUrlLoadedBotId, setScreenUrlLoadedBotId] = useState<string | null>(null);
   const [computerOpen, setComputerOpen] = useState(false);
   const [computerBotId, setComputerBotId] = useState<string | undefined>();
@@ -206,11 +208,17 @@ export function useComputerState({
     };
   }, [screenFrame, screenUrl]);
   useEffect(() => {
-    if (!screenFrame) return;
-    // A Wuying login code is spent once a frame has used it; the next frame needs a fresh read.
+    // Each Wuying frame is keyed by its URL, so it loads exactly one login code.
+    const frameUrl = screenUrlRef.current;
+    if (!screenFrame || !frameUrl?.startsWith("wuying:")) return;
     return () => {
+      // A frame replaced by a fresh code leaves that code alone.
+      if (screenUrlRef.current !== frameUrl) return;
       screenSessionEnded.current = false;
-      setScreenUrl((current) => (current?.startsWith("wuying:") ? null : current));
+      setScreenUrl(null);
+      // Another frame may still show this computer, such as the panel once the overlay closes.
+      const botId = computerBotIdRef.current;
+      if (botId && computerVisible.current) void refreshComputerScreen(botId);
     };
   }, [screenFrame]);
   useEffect(() => {
@@ -333,7 +341,10 @@ export function useComputerState({
     computerErrorFromScreen,
     setComputerErrorFromScreen,
     setScreenFrame,
-    screenFrameKey,
+    // A fresh Wuying code changes only the URL fragment, which would not reload the frame.
+    screenFrameKey: screenUrl?.startsWith("wuying:")
+      ? `${screenFrameKey}:${screenUrl}`
+      : String(screenFrameKey),
     screenLoadError,
     setScreenLoadError,
     computerVisible,
