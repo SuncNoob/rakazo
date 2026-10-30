@@ -151,17 +151,19 @@ export function useComputerState({
       if (screenUrl?.startsWith("wuying:") && ended) {
         // A Wuying login code works once, so a frame that loaded a spent one, or a session
         // another viewer took over, can only come back with a fresh read of the screen.
+        // Remounting the frame would only replay the spent code, so wait out the allowance instead.
         screenSessionEnded.current = true;
-        const now = Date.now();
-        if (now - wuyingRetryAt.current >= SCREEN_RECONNECT_EVERY_MS) {
-          wuyingRetryAt.current = now;
-          const botId = computerBotIdRef.current;
-          clearTimeout(reconnect);
-          reconnect = setTimeout(() => {
-            if (botId && !stopped.signal.aborted) void refreshComputerScreen(botId);
-          }, SCREEN_RECONNECT_DELAY_MS);
-          return;
-        }
+        const delay = Math.max(
+          SCREEN_RECONNECT_DELAY_MS,
+          wuyingRetryAt.current + SCREEN_RECONNECT_EVERY_MS - Date.now(),
+        );
+        wuyingRetryAt.current = Date.now() + delay;
+        const botId = computerBotIdRef.current;
+        clearTimeout(reconnect);
+        reconnect = setTimeout(() => {
+          if (botId && !stopped.signal.aborted) void refreshComputerScreen(botId);
+        }, delay);
+        return;
       }
       if (screenReconnect().report(message.rakazoScreen) === "reconnect") {
         screenRefocus.current.dropped(document.activeElement === screenFrame);
@@ -203,6 +205,14 @@ export function useComputerState({
       document.removeEventListener("focusin", onFocusIn);
     };
   }, [screenFrame, screenUrl]);
+  useEffect(() => {
+    if (!screenFrame) return;
+    // A Wuying login code is spent once a frame has used it; the next frame needs a fresh read.
+    return () => {
+      screenSessionEnded.current = false;
+      setScreenUrl((current) => (current?.startsWith("wuying:") ? null : current));
+    };
+  }, [screenFrame]);
   useEffect(() => {
     if (!computerOpen) {
       setComputerViewport(null);
@@ -255,7 +265,8 @@ export function useComputerState({
     setComputerErrorFromScreen(false);
     const cached = computerCacheRef.current.get(botId);
     if (cached) {
-      setScreenUrl(cached.screenUrl);
+      // A cached Wuying screen carries a login code that has already been used.
+      setScreenUrl(cached.screenUrl?.startsWith("wuying:") ? null : cached.screenUrl);
       commitComputer(cached.computer);
     } else {
       setScreenUrl(null);
