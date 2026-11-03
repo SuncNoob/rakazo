@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { prepareToolRequest, type ToolRequest } from "./run-tool-request.js";
+import type { ToolRequest } from "./run-tool-request.js";
+import { prepareToolRequest } from "./run-tool-request.js";
 
 function ownBotUpdateCall() {
   const ctx = {
@@ -39,6 +40,7 @@ function ownBotUpdateCall() {
     replayEffectToolName: "update_bot",
     fleetSummary: undefined,
     heldForApproval: false,
+    purchase: undefined,
   };
   return { ctx, request: () => structuredClone(request) };
 }

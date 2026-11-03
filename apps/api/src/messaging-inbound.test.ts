@@ -244,12 +244,25 @@ function createDeps(
               (row.status ?? "pending") !== where.status.not,
           ).length,
       ),
+      findFirst: vi.fn(
+        async ({ where }: { where: { identityId: string; kind: string; status: string } }) =>
+          outboundRows
+            .filter(
+              (row) =>
+                row.identityId === where.identityId &&
+                row.kind === where.kind &&
+                (row.status ?? "pending") === where.status,
+            )
+            .toSorted(
+              (a, b) => (b.createdAt as Date).getTime() - (a.createdAt as Date).getTime(),
+            )[0] ?? null,
+      ),
       createMany: vi.fn(async ({ data }: { data: Array<Record<string, unknown>> }) => {
         let count = 0;
         for (const item of data) {
           // Honors skipDuplicates against the idempotencyKey unique key.
           if (outboundRows.some((row) => row.idempotencyKey === item.idempotencyKey)) continue;
-          outboundRows.push(item);
+          outboundRows.push({ createdAt: new Date(), ...item });
           count += 1;
         }
         return { count };
@@ -291,6 +304,7 @@ function createDeps(
         messagingOutbound: prisma.messagingOutbound,
         messagingIdentity: prisma.messagingIdentity,
         messagingLinkCode,
+        bot: prisma.bot,
       }),
     ),
   };
@@ -313,6 +327,7 @@ function createDeps(
     members,
     txMock,
     createdIdentities,
+    linkCodes,
   } as unknown as MessagingInboundDeps & {
     sendUserMessage: ReturnType<typeof vi.fn>;
     notify: ReturnType<typeof vi.fn>;
@@ -320,6 +335,7 @@ function createDeps(
     acknowledge: typeof acknowledge;
     runs: typeof runs;
     botReplies: typeof botReplies;
+    linkCodes: typeof linkCodes;
     provision: ReturnType<typeof vi.fn>;
     outboundRows: Array<Record<string, unknown>>;
     members: Array<Record<string, unknown>>;
@@ -1234,6 +1250,7 @@ describe("inbound receipt", () => {
     const deps = createDeps({
       invitedMember: { id: "cm-1", status: "invited", identityId: "mi-1" },
     });
+    sentPrompt(deps, "invite:ch-1:mi-1");
     const handle = createMessagingInboundHandler(deps);
     await handle({ ...dmEvent, content: "YES" });
 
@@ -1259,6 +1276,23 @@ describe("inbound receipt", () => {
   });
 });
 
+/** The request prompt the line sent this person, as invites and connection requests write it. */
+function sentPrompt(
+  deps: { outboundRows: Array<Record<string, unknown>> },
+  idempotencyKey: string,
+  ageMs = 60_000,
+  status = "sent",
+) {
+  deps.outboundRows.push({
+    idempotencyKey,
+    kind: "dm",
+    identityId: "mi-1",
+    body: "Reply YES to allow, NO to decline.",
+    status,
+    createdAt: new Date(Date.now() - ageMs),
+  });
+}
+
 describe("createMessagingInboundHandler owner commands", () => {
   it("approves the most recent pending invite on YES and confirms by DM", async () => {
     const invited = {
@@ -1269,6 +1303,7 @@ describe("createMessagingInboundHandler owner commands", () => {
       status: "invited",
     };
     const deps = createDeps({ invitedMember: invited });
+    sentPrompt(deps, "invite:ch-1:mi-1");
     const handle = createMessagingInboundHandler(deps);
     await handle({ ...dmEvent, content: "YES" });
 
@@ -1279,7 +1314,12 @@ describe("createMessagingInboundHandler owner commands", () => {
       }),
     );
     expect(deps.outboundRows).toEqual([
-      expect.objectContaining({ kind: "dm", identityId: "mi-1" }),
+      expect.objectContaining({ idempotencyKey: "invite:ch-1:mi-1" }),
+      expect.objectContaining({
+        kind: "dm",
+        identityId: "mi-1",
+        idempotencyKey: "command:approve:cm-1",
+      }),
     ]);
     expect(deps.sendUserMessage).not.toHaveBeenCalled();
   });
@@ -1287,6 +1327,7 @@ describe("createMessagingInboundHandler owner commands", () => {
   it("declines on NO", async () => {
     const invited = { id: "cm-1", channelId: "ch-1", status: "invited", identityId: "mi-1" };
     const deps = createDeps({ invitedMember: invited });
+    sentPrompt(deps, "invite:ch-1:mi-1");
     const handle = createMessagingInboundHandler(deps);
     await handle({ ...dmEvent, content: "no" });
 
@@ -1361,6 +1402,7 @@ describe("createMessagingInboundHandler owner commands", () => {
         },
       ),
     });
+    sentPrompt(deps, "connect:bot-9:bot-1");
     const handle = createMessagingInboundHandler(deps);
     await handle({ ...dmEvent, content: "YES" });
 
@@ -1375,6 +1417,74 @@ describe("createMessagingInboundHandler owner commands", () => {
         expect.objectContaining({ kind: "dm", identityId: "mi-1" }),
         expect.objectContaining({ kind: "dm", identityId: "mi-9" }),
       ]),
+    );
+    expect(deps.sendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["the bot wrote since the invite", "reply"],
+    ["the invite is more than a day old", "stale"],
+    ["no prompt was ever sent", "none"],
+  ])("passes YES to the bot when %s", async (_case, setup) => {
+    const deps = createDeps({
+      invitedMember: { id: "cm-1", channelId: "ch-1", status: "invited", identityId: "mi-1" },
+    });
+    if (setup === "reply") {
+      sentPrompt(deps, "invite:ch-1:mi-1", 120_000);
+      sentPrompt(deps, "reply:msg-7:0", 60_000);
+    }
+    if (setup === "stale") sentPrompt(deps, "invite:ch-1:mi-1", 25 * 60 * 60 * 1000);
+    const handle = createMessagingInboundHandler(deps);
+    await handle({ ...dmEvent, content: "YES" });
+
+    expect(deps.prisma.messagingChannelMember.updateMany).not.toHaveBeenCalled();
+    expect(deps.sendUserMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ blocks: [{ kind: "text", text: "YES" }] }),
+    );
+  });
+
+  it("answers the delivered question, not a request still waiting to go out", async () => {
+    const deps = createDeps({
+      invitedMember: { id: "cm-1", channelId: "ch-1", status: "invited", identityId: "mi-1" },
+    });
+    sentPrompt(deps, "reply:msg-7:0", 120_000);
+    sentPrompt(deps, "invite:ch-1:mi-1", 60_000, "pending");
+    const handle = createMessagingInboundHandler(deps);
+    await handle({ ...dmEvent, content: "YES" });
+
+    expect(deps.prisma.messagingChannelMember.updateMany).not.toHaveBeenCalled();
+    expect(deps.sendUserMessage).toHaveBeenCalled();
+  });
+
+  it("answers only the request whose prompt was sent last", async () => {
+    const deps = createDeps({
+      invitedMember: { id: "cm-1", channelId: "ch-1", status: "invited", identityId: "mi-1" },
+    });
+    const connection = vi.fn(async () => null);
+    Object.assign(deps.prisma.agentConnection, { findFirst: connection });
+    sentPrompt(deps, "invite:ch-1:mi-1", 120_000);
+    sentPrompt(deps, "connect:bot-9:bot-1", 60_000);
+    const handle = createMessagingInboundHandler(deps);
+    await handle({ ...dmEvent, content: "YES" });
+
+    // The newer prompt names a connection that is no longer pending; the older invite stays open.
+    expect(connection).toHaveBeenCalledWith({
+      where: { requesterBotId: "bot-9", targetBotId: "bot-1", status: "pending" },
+    });
+    expect(deps.prisma.messagingChannelMember.updateMany).not.toHaveBeenCalled();
+    expect(deps.sendUserMessage).toHaveBeenCalled();
+  });
+
+  it("accepts a YES sent as a plain text message", async () => {
+    const deps = createDeps({
+      invitedMember: { id: "cm-1", channelId: "ch-1", status: "invited", identityId: "mi-1" },
+    });
+    sentPrompt(deps, "invite:ch-1:mi-1");
+    const handle = createMessagingInboundHandler(deps);
+    await handle({ ...dmEvent, content: "YES", transport: "SMS" });
+
+    expect(deps.prisma.messagingChannelMember.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "approved" }) }),
     );
     expect(deps.sendUserMessage).not.toHaveBeenCalled();
   });
@@ -2070,6 +2180,7 @@ describe("createMessagingInboundHandler owner-command status races", () => {
       status: "invited",
     };
     const deps = createDeps({ invitedMember: swept, members: [swept] });
+    sentPrompt(deps, "invite:ch-1:mi-1");
     Object.assign(deps.prisma.messagingChannelMember, {
       findFirst: vi.fn(async ({ where }: { where?: { status?: string } }) => {
         if (where?.status === "invited" && swept.status === "invited") {
@@ -2086,13 +2197,14 @@ describe("createMessagingInboundHandler owner-command status races", () => {
     await handle({ ...dmEvent, content: "YES" });
 
     expect(swept.status).toBe("left");
-    expect(deps.outboundRows).toHaveLength(0);
+    expect(deps.outboundRows).toHaveLength(1);
     // No longer actionable: the text falls through as a normal message.
     expect(deps.sendUserMessage).toHaveBeenCalled();
   });
 
   it("does not let YES overwrite a concurrently revoked agent connection", async () => {
     const deps = createDeps();
+    sentPrompt(deps, "connect:bot-9:bot-1");
     const state = {
       id: "ac-7",
       requesterBotId: "bot-9",
@@ -2125,7 +2237,7 @@ describe("createMessagingInboundHandler owner-command status races", () => {
     await handle({ ...dmEvent, content: "YES" });
 
     expect(state.status).toBe("revoked");
-    expect(deps.outboundRows).toHaveLength(0);
+    expect(deps.outboundRows).toHaveLength(1);
     expect(deps.sendUserMessage).toHaveBeenCalled();
   });
 
@@ -2223,6 +2335,7 @@ describe("createMessagingInboundHandler approval-cycle notifications", () => {
 describe("createMessagingInboundHandler confirmation atomicity", () => {
   it("writes the connection confirmations under the claim's transaction", async () => {
     const deps = createDeps();
+    sentPrompt(deps, "connect:bot-9:bot-1");
     Object.assign(deps.prisma, {
       agentConnection: {
         findFirst: vi.fn(async () => ({
@@ -2280,6 +2393,7 @@ describe("createMessagingInboundHandler confirmation atomicity", () => {
       status: "invited",
     };
     const deps = createDeps({ invitedMember: invited });
+    sentPrompt(deps, "invite:ch-1:mi-1");
     const txCreateMany = vi.fn(async ({ data }: { data: Array<Record<string, unknown>> }) => {
       deps.outboundRows.push(...data);
       return { count: data.length };
@@ -2303,6 +2417,45 @@ describe("createMessagingInboundHandler confirmation atomicity", () => {
         data: [expect.objectContaining({ idempotencyKey: "command:approve:cm-1" })],
       }),
     );
+    expect(deps.sendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it("leaves one group when a redelivered LEAVE retries a failed confirmation", async () => {
+    const newest = { id: "cm-1", channelId: "ch-1", identityId: "mi-1", status: "approved" };
+    const older = { id: "cm-2", channelId: "ch-2", identityId: "mi-1", status: "approved" };
+    const deps = createDeps({ members: [newest, older] });
+    Object.assign(deps.prisma.messagingChannelMember, {
+      findFirst: vi.fn(async ({ where }: { where?: { status?: string } }) =>
+        where?.status === "approved"
+          ? ([newest, older].find((m) => m.status === "approved") ?? null)
+          : null,
+      ),
+    });
+    const transaction = vi.mocked(deps.prisma.$transaction).getMockImplementation()!;
+    vi.mocked(deps.prisma.$transaction).mockImplementation(async (fn) => {
+      const before = { newest: newest.status, older: older.status };
+      try {
+        return await transaction(fn);
+      } catch (error) {
+        // Model rollback at the database boundary, not in the handler.
+        newest.status = before.newest;
+        older.status = before.older;
+        throw error;
+      }
+    });
+    vi.mocked(deps.prisma.messagingOutbound.createMany).mockRejectedValueOnce(
+      new Error("database unavailable"),
+    );
+    const handle = createMessagingInboundHandler(deps);
+    const leave = { ...dmEvent, provider: "telegram", content: "LEAVE" };
+
+    await expect(handle(leave)).rejects.toThrow("database unavailable");
+    await handle(leave);
+
+    expect([newest.status, older.status]).toEqual(["left", "approved"]);
+    expect(deps.outboundRows).toEqual([
+      expect.objectContaining({ idempotencyKey: "command:leave:cm-1", identityId: "mi-1" }),
+    ]);
     expect(deps.sendUserMessage).not.toHaveBeenCalled();
   });
 });
@@ -2350,6 +2503,70 @@ describe("createMessagingInboundHandler linking", () => {
         idempotencyKey: "link:code-1",
         kind: "dm",
         identityId: "mi-linked",
+        body: 'Linked. Messages here now reach "Chief".',
+      }),
+    ]);
+  });
+
+  it("rolls back linking when confirmation fails, then retries without starting a run", async () => {
+    const deps = createDeps({ identity: null, linkCode: { ...liveCode } });
+    deps.openSignup = false;
+    const transaction = vi.mocked(deps.prisma.$transaction).getMockImplementation()!;
+    vi.mocked(deps.prisma.$transaction).mockImplementation(async (fn) => {
+      try {
+        return await transaction(fn);
+      } catch (error) {
+        // Model rollback at the database boundary, not in the handler.
+        deps.linkCodes.push({ ...liveCode });
+        deps.createdIdentities.length = 0;
+        deps.outboundRows.length = 0;
+        throw error;
+      }
+    });
+    vi.mocked(deps.prisma.bot.findUnique).mockRejectedValueOnce(new Error("database unavailable"));
+    const handle = createMessagingInboundHandler(deps);
+    const event = { ...dmEvent, content: "ABCD2345" };
+    await expect(handle(event)).rejects.toThrow("database unavailable");
+    expect(deps.createdIdentities).toHaveLength(0);
+    await handle(event);
+    expect(deps.sendUserMessage).not.toHaveBeenCalled();
+    expect(deps.outboundRows).toEqual([
+      expect.objectContaining({ body: 'Linked. Messages here now reach "Chief".' }),
+    ]);
+  });
+
+  it("moves a linked sender to another bot, saving the confirmation with the switch", async () => {
+    const deps = createDeps({ linkCode: { ...liveCode, userId: "user-1" } });
+    const transaction = vi.mocked(deps.prisma.$transaction).getMockImplementation()!;
+    vi.mocked(deps.prisma.$transaction).mockImplementation(async (fn) => {
+      try {
+        return await transaction(fn);
+      } catch (error) {
+        // Model rollback at the database boundary, not in the handler.
+        deps.linkCodes.push({ ...liveCode, userId: "user-1" });
+        deps.outboundRows.length = 0;
+        throw error;
+      }
+    });
+    vi.mocked(deps.prisma.messagingOutbound.createMany).mockRejectedValueOnce(
+      new Error("database unavailable"),
+    );
+    const handle = createMessagingInboundHandler(deps);
+    const event = { ...dmEvent, content: "ABCD2345" };
+    await expect(handle(event)).rejects.toThrow("database unavailable");
+    await handle(event);
+
+    expect(deps.prisma.messagingIdentity.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "mi-1" },
+        data: expect.objectContaining({ botId: "bot-web", spaceId: "ws-web" }),
+      }),
+    );
+    expect(deps.sendUserMessage).not.toHaveBeenCalled();
+    expect(deps.outboundRows).toEqual([
+      expect.objectContaining({
+        idempotencyKey: "link:code-1",
+        identityId: "mi-1",
         body: 'Linked. Messages here now reach "Chief".',
       }),
     ]);

@@ -464,7 +464,7 @@ export async function sleepComputerIfIdle(
   // when they next need it. A user in control is left alone: control leases expire on their
   // own, and that release resumes the waiting run.
   // Otherwise a run waiting for takeover holds an unbilled computer for TAKEOVER_IDLE_GRACE_MS.
-  // Once its organization has spent the month's allowance, nothing but a user still in control,
+  // Once its organization has spent this period's allowance, nothing but a user still in control,
   // not even a working coding agent, holds the computer up.
   const activeControl = hasActiveComputerControl(computer);
   const allowanceUsed = !activeControl && (await sandboxAllowanceUsedUp(deps, computer));
@@ -1046,23 +1046,33 @@ async function hasActiveBackgroundWork(
       return !isSandboxGoneError(error) && !isSandboxDamagedError(error);
     }
   }
-  let exitCode: number | undefined;
-  let stdout = "";
   try {
-    for await (const event of sandbox.execute(
-      computer,
-      {
-        argv: ["bash", "-c", BACKGROUND_WORK_PROBE, "rakazo-background-probe", computerId],
-        timeoutMs: 10_000,
-      },
-      context,
-    )) {
-      if (event.type === "stdout") stdout += event.data;
-      if (event.type === "exit") exitCode = event.code;
-    }
+    return (await probeBackgroundWork(sandbox, computer, computerId, context)) !== "idle";
   } catch (error) {
     return !isSandboxGoneError(error) && !isSandboxDamagedError(error);
   }
+}
+
+/** The Linux marker probe, for providers without their own inspectBackgroundWork. */
+export async function probeBackgroundWork(
+  sandbox: Pick<SandboxProvider, "execute">,
+  computer: ComputerRef,
+  computerId: string,
+  context: AdapterContext,
+): Promise<"active" | "idle"> {
+  let exitCode: number | undefined;
+  let stdout = "";
+  for await (const event of sandbox.execute(
+    computer,
+    {
+      argv: ["bash", "-c", BACKGROUND_WORK_PROBE, "rakazo-background-probe", computerId],
+      timeoutMs: 10_000,
+    },
+    context,
+  )) {
+    if (event.type === "stdout") stdout += event.data;
+    if (event.type === "exit") exitCode = event.code;
+  }
   // Only the probe's explicit idle result permits suspension; unsupported or failed probes retry.
-  return exitCode !== 1 || stdout.trim() !== BACKGROUND_WORK_IDLE_SENTINEL;
+  return exitCode === 1 && stdout.trim() === BACKGROUND_WORK_IDLE_SENTINEL ? "idle" : "active";
 }
